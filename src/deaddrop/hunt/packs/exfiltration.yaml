@@ -1,0 +1,65 @@
+# Hunt Pack: Data Exfiltration
+# Detects data exfiltration techniques
+
+name: exfiltration
+description: "Hunt for data exfiltration: DNS tunneling, HTTP uploads, cloud storage, clipboard"
+severity: high
+
+rules: |
+    rule Exfil_DNS {
+        meta:
+            description = "DNS exfiltration indicators"
+            severity = "high"
+            category = "exfiltration"
+        strings:
+            $d1 = "dnscat" nocase
+            $d2 = "iodine" nocase
+            $d3 = "DNSExfiltrator" nocase
+        condition:
+            any of them
+    }
+
+    rule Exfil_HTTP {
+        meta:
+            description = "HTTP exfiltration indicators"
+            severity = "high"
+            category = "exfiltration"
+        strings:
+            $h1 = "curl" nocase
+            $h2 = "wget" nocase
+            $h3 = "certutil -urlcache" nocase
+            $h4 = "bitsadmin /transfer" nocase
+            $h5 = "Invoke-WebRequest" nocase
+        condition:
+            2 of them
+    }
+
+    rule Exfil_CloudStorage {
+        meta:
+            description = "Cloud storage exfiltration"
+            severity = "medium"
+            category = "exfiltration"
+        strings:
+            $c1 = "dropbox" nocase
+            $c2 = "drive.google.com" nocase
+            $c3 = "onedrive" nocase
+            $c4 = "mega.nz" nocase
+            $c5 = "pastebin" nocase
+        condition:
+            2 of them
+    }
+
+    rule Exfil_Archive {
+        meta:
+            description = "Archive before exfiltration"
+            severity = "medium"
+            category = "exfiltration"
+        strings:
+            $a1 = "7z" nocase
+            $a2 = "rar" nocase
+            $a3 = "zip -r" nocase
+            $a4 = "tar czf" nocase
+            $a5 = "Compress-Archive" nocase
+        condition:
+            any of them
+    }

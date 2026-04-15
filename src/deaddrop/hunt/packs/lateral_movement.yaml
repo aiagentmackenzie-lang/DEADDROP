@@ -1,0 +1,59 @@
+# Hunt Pack: Lateral Movement
+# Detects lateral movement techniques
+
+name: lateral_movement
+description: "Hunt for lateral movement: PsExec, WMI, RDP, SMB, WinRM"
+severity: high
+
+rules: |
+    rule Lateral_PsExec {
+        meta:
+            description = "PsExec lateral movement"
+            severity = "high"
+            category = "lateral_movement"
+        strings:
+            $p1 = "psexec" nocase
+            $p2 = "PSEXESVC" nocase wide
+            $p3 = "\\ADMIN$\\System32\\" nocase
+        condition:
+            2 of them
+    }
+
+    rule Lateral_WMI {
+        meta:
+            description = "WMI lateral movement"
+            severity = "high"
+            category = "lateral_movement"
+        strings:
+            $w1 = "wmic" nocase
+            $w2 = "Win32_Process" nocase
+            $w3 = "Win32_Service" nocase
+        condition:
+            2 of them
+    }
+
+    rule Lateral_RDP {
+        meta:
+            description = "RDP lateral movement indicators"
+            severity = "medium"
+            category = "lateral_movement"
+        strings:
+            $r1 = "Terminal Services" nocase
+            $r2 = "rdpclip" nocase
+            $r3 = "\\tsadmin" nocase
+        condition:
+            any of them
+    }
+
+    rule Lateral_SMB {
+        meta:
+            description = "SMB lateral movement indicators"
+            severity = "medium"
+            category = "lateral_movement"
+        strings:
+            $s1 = "\\\\ADMIN$" nocase
+            $s2 = "\\\\C$" nocase
+            $s3 = "\\\\IPC$" nocase
+        condition:
+            any of them
+    }

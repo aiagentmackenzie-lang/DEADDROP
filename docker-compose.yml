@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deaddrop-engine
+    volumes:
+      - deaddrop-data:/root/.deaddrop
+      - ./rules:/app/rules:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["tail", "-f", "/dev/null"]  # Keep alive for CLI
+
+  server:
+    build:
+      context: ./server
+      dockerfile: docker/Dockerfile
+    container_name: deaddrop-server
+    ports:
+      - "8080:8080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+    depends_on:
+      - engine
+    volumes:
+      - deaddrop-data:/root/.deaddrop
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: deaddrop-dashboard
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+
+volumes:
+  deaddrop-data:

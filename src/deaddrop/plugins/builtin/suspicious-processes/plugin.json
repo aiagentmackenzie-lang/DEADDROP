@@ -1,0 +1,7 @@
+{
+    "name": "suspicious-processes",
+    "version": "1.0.0",
+    "description": "Flag suspicious processes from memory analysis",
+    "hooks": ["post_analyze"],
+    "entry": "main"
+}

@@ -1,0 +1,72 @@
+# Hunt Pack: Persistence Mechanisms
+# Detects common persistence techniques on Windows systems
+
+name: persistence
+description: "Hunt for persistence mechanisms: Run keys, services, scheduled tasks, WMI subscriptions"
+severity: high
+
+rules: |
+    rule Persistence_RunKey {
+        meta:
+            description = "Run key persistence"
+            severity = "high"
+            category = "persistence"
+        strings:
+            $run1 = "CurrentVersion\\Run" nocase wide
+            $run2 = "CurrentVersion\\RunOnce" nocase wide
+            $run3 = "CurrentVersion\\RunOnceEx" nocase wide
+        condition:
+            any of them
+    }
+
+    rule Persistence_Service {
+        meta:
+            description = "Service creation for persistence"
+            severity = "high"
+            category = "persistence"
+        strings:
+            $svc1 = "CurrentControlSet\\Services" nocase wide
+            $svc2 = "Services\\EventLog" nocase wide
+        condition:
+            any of them
+    }
+
+    rule Persistence_ScheduledTask {
+        meta:
+            description = "Scheduled task persistence"
+            severity = "high"
+            category = "persistence"
+        strings:
+            $task1 = "Schedule\\TaskCache" nocase wide
+            $task2 = "schtasks" nocase
+            $task3 = "at.exe" nocase
+        condition:
+            any of them
+    }
+
+    rule Persistence_WMI {
+        meta:
+            description = "WMI subscription persistence"
+            severity = "critical"
+            category = "persistence"
+        strings:
+            $wmi1 = "CommandLineEventConsumer" nocase
+            $wmi2 = "ActiveScriptEventConsumer" nocase
+            $wmi3 = "__EventToConsumerBinding" nocase
+            $wmi4 = "__EventFilter" nocase
+        condition:
+            2 of them
+    }
+
+    rule Persistence_ShellExtension {
+        meta:
+            description = "Shell extension persistence"
+            severity = "medium"
+            category = "persistence"
+        strings:
+            $se1 = "ShellExecuteHooks" nocase
+            $se2 = "SharedTaskScheduler" nocase wide
+            $se3 = "ShellServiceObjectDelayLoad" nocase wide
+        condition:
+            any of them
+    }

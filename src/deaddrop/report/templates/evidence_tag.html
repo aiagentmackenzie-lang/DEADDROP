@@ -1,0 +1,16 @@
+"""Evidence tag template for embedded report sections."""
+<!-- Evidence Tag: {{ evidence.id }} -->
+<div class="evidence-tag">
+    <div class="evidence-header">
+        <span class="evidence-type">{{ evidence.type|upper }}</span>
+        <span class="evidence-filename">{{ evidence.filename }}</span>
+    </div>
+    <table>
+        <tr><td>Format</td><td>{{ evidence.format }}</td></tr>
+        <tr><td>Size</td><td>{{ evidence.size_bytes|filesizeformat }}</td></tr>
+        <tr><td>SHA-256</td><td class="mono">{{ evidence.sha256 }}</td></tr>
+        <tr><td>MD5</td><td class="mono">{{ evidence.md5 }}</td></tr>
+        <tr><td>Ingested</td><td>{{ evidence.ingested_at }}</td></tr>
+        <tr><td>Verified</td><td>{% if evidence.verified %}✓{% else %}✗{% endif %}</td></tr>
+    </table>
+</div>

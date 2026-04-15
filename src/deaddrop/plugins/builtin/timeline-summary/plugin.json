@@ -1,0 +1,7 @@
+{
+    "name": "timeline-summary",
+    "version": "1.0.0",
+    "description": "Generate a statistical summary of the case timeline",
+    "hooks": ["post_analyze"],
+    "entry": "main"
+}

@@ -1,0 +1,7 @@
+{
+    "name": "hash-verifier",
+    "version": "1.0.0",
+    "description": "Re-verify evidence integrity (chain of custody check)",
+    "hooks": ["post_ingest"],
+    "entry": "main"
+}

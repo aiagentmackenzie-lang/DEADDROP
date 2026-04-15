@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deaddrop"
+version = "1.0.0"
+description = "Digital Forensics Toolkit — Unified DFIR with AI-assisted triage"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.12"
+authors = [{name = "Raphael", email = "raphael@eliteenglish.com.br"}]
+
+dependencies = [
+    "click>=8.1",
+    "rich>=13.0",
+    "pydantic>=2.0",
+    "sqlite-utils>=3.36",
+    "httpx>=0.27",
+    "yara-python>=4.5",
+    "jinja2>=3.1",
+    "weasyprint>=62",
+    "scikit-learn>=1.5",
+    "python-dateutil>=2.8",
+]
+
+[project.optional-dependencies]
+disk = ["pytsk3>=20240101", "libewf-python>=20240101"]
+memory = ["volatility3>=2.7"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.4"]
+
+[project.scripts]
+deaddrop = "deaddrop.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
