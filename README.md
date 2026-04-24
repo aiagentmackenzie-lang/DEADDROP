@@ -3,6 +3,8 @@
 **Unified DFIR toolkit with AI-assisted triage, modern web dashboard, and automated reporting.**
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://python.org)
+[![Tests: 89 passing](https://img.shields.io/badge/Tests-89%20passing-brightgreen.svg)](tests/)
+[![Lint: 0 errors](https://img.shields.io/badge/Ruff-0%20errors-green.svg)](https://docs.astral.sh/ruff/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -18,14 +20,14 @@ DEADDROP is a CLI-first digital forensics toolkit that unifies disk forensics, m
 ## ✨ Features
 
 - 🗄️ **Evidence Management** — Chain of custody with SHA-256/MD5 verification at every step
-- 💾 **Disk Forensics** — Filesystem parsing, file carving, registry analysis, prefetch, event logs, MFT parsing
+- 💾 **Disk Forensics** — Filesystem parsing, streaming file carving, registry analysis, prefetch, event logs, MFT parsing
 - 🧠 **Memory Forensics** — Volatility3 wrapper for process analysis, network connections, malware detection
 - ⏱️ **Super-Timeline** — Merge disk + memory + log artifacts into unified timeline (CSV/JSON/body file export)
 - 🎯 **Artifact Hunting** — YARA scanning, IOC matching, pre-built hunt packs (persistence, lateral movement, exfiltration)
-- 🤖 **AI Triage** — Statistical anomaly detection + LLM-powered case summaries (Ollama)
+- 🤖 **AI Triage** — Statistical anomaly detection (temporal bursts, severity outliers, attack patterns) + LLM case summaries (Ollama)
 - 📄 **Reporting** — Professional HTML/PDF reports with embedded evidence, chain of custody, and timeline visualization
 - 🔌 **Plugin System** — Extend without touching core (Python entry points)
-- 📊 **Web Dashboard** — React + D3 interactive timeline visualization
+- 📊 **Web Dashboard** — React 19 + D3 interactive timeline visualization
 
 ---
 
@@ -37,6 +39,10 @@ DEADDROP is a CLI-first digital forensics toolkit that unifies disk forensics, m
 # Clone
 git clone https://github.com/aiagentmackenzie-lang/DEADDROP.git
 cd DEADDROP
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate
 
 # Install with pip
 pip install -e .
@@ -67,12 +73,18 @@ deaddrop analyze memory --case <case-id> --plugin windows.pslist
 
 # Event log analysis
 deaddrop analyze events --case <case-id>
+
+# Registry analysis
+deaddrop analyze registry --case <case-id>
+
+# Prefetch analysis
+deaddrop analyze prefetch --case <case-id>
 ```
 
 ### Hunt
 
 ```bash
-# YARA scan
+# YARA scan with custom rules
 deaddrop hunt run --case <case-id> --yara /path/to/rules/
 
 # Pre-built hunt pack
@@ -103,8 +115,9 @@ deaddrop timeline export --case <case-id> --format csv
 deaddrop timeline export --case <case-id> --format json
 deaddrop timeline export --case <case-id> --format body
 
-# Filter
+# Filter by time range or source
 deaddrop timeline filter --case <case-id> --from 2026-04-01 --to 2026-04-15
+deaddrop timeline filter --case <case-id> --source events
 ```
 
 ### Report
@@ -113,7 +126,7 @@ deaddrop timeline filter --case <case-id> --from 2026-04-01 --to 2026-04-15
 # HTML report
 deaddrop report generate --case <case-id> --format html
 
-# PDF report (requires weasyprint)
+# PDF report (requires weasyprint + system libs: pango, gdk-pixbuf)
 deaddrop report generate --case <case-id> --format pdf
 ```
 
@@ -133,6 +146,20 @@ docker-compose up
 
 Dashboard: http://localhost:3000  
 API: http://localhost:8080
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run full test suite (89 tests)
+pytest tests/ -v
+
+# Lint check (0 errors)
+ruff check src/ tests/
+```
+
+Test coverage spans: case management, evidence ingestion, file carving, MFT parsing, anomaly detection, triage scoring, timeline engine, report generation, config, and CLI commands.
 
 ---
 
@@ -161,7 +188,7 @@ CLI (Click) → Core Engine (Python) → API Server (Fastify/TS) → Dashboard (
 
 ```
 DEADDROP/
-├── src/deaddrop/         # Python engine
+├── src/deaddrop/         # Python engine (~3,650 LOC)
 │   ├── cli/              # Click CLI commands
 │   ├── core/             # Case management, evidence, config
 │   ├── disk/             # Disk forensics (filesystem, carving, registry, prefetch, events, MFT)
@@ -172,9 +199,9 @@ DEADDROP/
 │   ├── report/           # HTML/PDF report generation
 │   └── plugins/          # Plugin system + built-in plugins
 ├── server/               # Fastify API server (TypeScript)
-├── dashboard/            # React + D3 dashboard
+├── dashboard/            # React 19 + D3 dashboard
 ├── rules/                # YARA rules (malware, persistence, suspicious)
-├── tests/                # pytest test suite
+├── tests/                # pytest test suite (89 tests)
 └── docs/                 # Documentation
 ```
 
@@ -187,11 +214,22 @@ DEADDROP/
 | **Disk** | RAW/DD, E01, VMDK, QCOW2, ISO, IMG |
 | **Memory** | RAW, VMEM, Windows Crash Dump, ELF64, Windows Minidump |
 
+Format detection uses both file extension and magic bytes (EWF, KDMV, QFI\xfb, ELF, MDMP, PAGE).
+
 ---
 
 ## 📋 Security Event Coverage
 
-50+ Windows security events including: Logon/Logoff (4624/4625/4634), Credential Access (4648/4768/4769), Process Creation (4688), Service Installation (4697/7045), Scheduled Tasks (4698/4702), Audit Clearing (1102), and more.
+28 Windows security event IDs classified for triage, including: Logon/Logoff (4624/4625/4634), Credential Access (4648/4768/4769), Process Creation (4688), Service Installation (4697/7045), Scheduled Tasks (4698/4702), Audit Clearing (1102), and more.
+
+---
+
+## 🔒 Security Notes
+
+- **File carving** uses streaming reads (4MB chunks) — never loads entire disk images into RAM
+- **No hallucinated artifacts** — parsers return empty results when no real data is found; reference data is used for classification only
+- **Chain of custody** — SHA-256 + MD5 hashes computed at ingestion and re-verified on demand
+- **Plugin sandboxing** — plugins run in isolated entry points, cannot modify core engine
 
 ---
 
@@ -199,7 +237,7 @@ DEADDROP/
 
 1. Fork the repo
 2. Create a feature branch
-3. Write tests
+3. Write tests (pytest + ruff)
 4. Submit a PR
 
 ---
