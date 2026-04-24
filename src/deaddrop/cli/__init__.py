@@ -1,5 +1,7 @@
 """DEADDROP CLI — Digital Forensics Toolkit."""
 
+from pathlib import Path
+
 import click
 from rich.console import Console
 from rich.table import Table
@@ -124,7 +126,7 @@ def ingest_disk(image: str, case_id: str):
         console.print(f"  Size:        {result['size_bytes']:,} bytes")
         console.print(f"  SHA-256:     {result['sha256']}")
         console.print(f"  MD5:         {result['md5']}")
-        console.print(f"  Verified:    ✓")
+        console.print("  Verified:    ✓")
     except FileNotFoundError as e:
         console.print(f"[red]{e}[/red]")
 
@@ -149,7 +151,7 @@ def ingest_memory(dump: str, case_id: str):
         console.print(f"  Size:        {result['size_bytes']:,} bytes")
         console.print(f"  SHA-256:     {result['sha256']}")
         console.print(f"  MD5:         {result['md5']}")
-        console.print(f"  Verified:    ✓")
+        console.print("  Verified:    ✓")
     except FileNotFoundError as e:
         console.print(f"[red]{e}[/red]")
 
@@ -171,7 +173,7 @@ def analyze_filesystem(case_id: str, evidence: str | None):
     mgr = get_case_manager()
     analyzer = FilesystemAnalyzer(mgr)
     results = analyzer.analyze(case_id, evidence)
-    console.print(f"[bold green]✓ Filesystem analysis complete[/bold green]")
+    console.print("[bold green]✓ Filesystem analysis complete[/bold green]")
     console.print(f"  Files found:  {results['total_files']}")
     console.print(f"  Deleted:      {results['deleted_files']}")
     console.print(f"  Carved:       {results['carved_files']}")
@@ -186,7 +188,7 @@ def analyze_registry(case_id: str, evidence: str | None):
     mgr = get_case_manager()
     analyzer = RegistryAnalyzer(mgr)
     results = analyzer.analyze(case_id, evidence)
-    console.print(f"[bold green]✓ Registry analysis complete[/bold green]")
+    console.print("[bold green]✓ Registry analysis complete[/bold green]")
     console.print(f"  Keys parsed:  {results['keys_parsed']}")
     console.print(f"  Artifacts:    {results['artifacts']}")
 
@@ -200,7 +202,7 @@ def analyze_prefetch(case_id: str, evidence: str | None):
     mgr = get_case_manager()
     analyzer = PrefetchAnalyzer(mgr)
     results = analyzer.analyze(case_id, evidence)
-    console.print(f"[bold green]✓ Prefetch analysis complete[/bold green]")
+    console.print("[bold green]✓ Prefetch analysis complete[/bold green]")
     console.print(f"  Prefetch files: {results['prefetch_count']}")
     console.print(f"  Executables:    {results['executables']}")
 
@@ -215,7 +217,7 @@ def analyze_events(case_id: str, evidence: str | None, source: str | None):
     mgr = get_case_manager()
     analyzer = EventLogAnalyzer(mgr)
     results = analyzer.analyze(case_id, evidence, source)
-    console.print(f"[bold green]✓ Event log analysis complete[/bold green]")
+    console.print("[bold green]✓ Event log analysis complete[/bold green]")
     console.print(f"  Events parsed: {results['events_parsed']}")
     console.print(f"  Security:      {results['security_events']}")
     console.print(f"  High severity: {results['high_severity']}")
@@ -231,7 +233,7 @@ def analyze_memory(case_id: str, evidence: str | None, plugin: str):
     mgr = get_case_manager()
     wrapper = VolatilityWrapper(mgr)
     results = wrapper.run_plugin(case_id, evidence, plugin)
-    console.print(f"[bold green]✓ Memory analysis complete[/bold green]")
+    console.print("[bold green]✓ Memory analysis complete[/bold green]")
     console.print(f"  Plugin:    {plugin}")
     console.print(f"  Findings:  {results['findings_count']}")
 
@@ -267,7 +269,7 @@ def hunt_run(case_id: str, yara_rules: str | None, ioc: str | None, pack: str | 
         scanner = YARAScanner(mgr)
         r = scanner.scan_pack(case_id, pack)
         results["yara_hits"] += r["hits"]
-    console.print(f"[bold green]✓ Hunt complete[/bold green]")
+    console.print("[bold green]✓ Hunt complete[/bold green]")
     console.print(f"  YARA hits: {results['yara_hits']}")
     console.print(f"  IOC hits:  {results['ioc_hits']}")
 
@@ -288,7 +290,7 @@ def timeline_generate(case_id: str):
     mgr = get_case_manager()
     engine = TimelineEngine(mgr)
     results = engine.generate(case_id)
-    console.print(f"[bold green]✓ Timeline generated[/bold green]")
+    console.print("[bold green]✓ Timeline generated[/bold green]")
     console.print(f"  Entries: {results['total_entries']}")
     console.print(f"  Sources: {', '.join(results['sources'])}")
 
@@ -303,7 +305,7 @@ def timeline_export(case_id: str, fmt: str, output: str | None):
     mgr = get_case_manager()
     exporter = TimelineExporter(mgr)
     path = exporter.export(case_id, fmt, output)
-    console.print(f"[bold green]✓ Timeline exported[/bold green]")
+    console.print("[bold green]✓ Timeline exported[/bold green]")
     console.print(f"  Format: {fmt}")
     console.print(f"  Path:   {path}")
 
@@ -342,7 +344,7 @@ def triage_run(case_id: str):
     mgr = get_case_manager()
     scorer = TriageScorer(mgr)
     results = scorer.score(case_id)
-    console.print(f"[bold green]✓ Triage complete[/bold green]")
+    console.print("[bold green]✓ Triage complete[/bold green]")
     console.print(f"  Anomalies: {results['anomalies']}")
     console.print(f"  High:      {results['high']}")
     console.print(f"  Critical:  {results['critical']}")
@@ -356,7 +358,7 @@ def triage_summary(case_id: str):
     mgr = get_case_manager()
     summarizer = LLMSummarizer(mgr)
     summary = summarizer.summarize(case_id)
-    console.print(f"[bold green]✓ Case Summary[/bold green]")
+    console.print("[bold green]✓ Case Summary[/bold green]")
     console.print(summary)
 
 
@@ -378,7 +380,7 @@ def report_generate(case_id: str, fmt: str, output: str | None):
     mgr = get_case_manager()
     gen = ReportGenerator(mgr)
     path = gen.generate(case_id, fmt, output)
-    console.print(f"[bold green]✓ Report generated[/bold green]")
+    console.print("[bold green]✓ Report generated[/bold green]")
     console.print(f"  Format: {fmt}")
     console.print(f"  Path:   {path}")
 

@@ -2,7 +2,6 @@
 
 import pytest
 import json
-from pathlib import Path
 
 from deaddrop.core.case import CaseManager
 from deaddrop.hunt.ioc_matcher import IOCMatcher

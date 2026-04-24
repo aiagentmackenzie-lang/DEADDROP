@@ -2,7 +2,6 @@
 
 import math
 from collections import Counter
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
@@ -136,28 +135,55 @@ class AnomalyDetector:
         return anomalies
 
     def _detect_attack_patterns(self, entries: list[dict]) -> list[dict]:
-        """Detect known attack pattern sequences in timeline."""
+        """Detect known attack pattern sequences in timeline.
+
+        Checks for temporal ordering — earlier-phase sources must appear
+        before later-phase sources to flag a pattern.
+        """
         anomalies = []
 
-        # Pattern: reconnaissance → exploitation → persistence → exfiltration
-        # Simplified: check for source sequences
+        # Build ordered source sequence from sorted timeline
         sources = [e.get("source", "") for e in entries if e.get("source")]
 
-        # Check for common attack chains
+        if len(sources) < 3:
+            return anomalies
+
+        # Pattern: earlier sources must appear before later ones
+        # (reconnaissance → exploitation → persistence → exfiltration)
         patterns = {
-            "recon_to_exploit": (["filesystem", "events"], "Reconnaissance followed by exploitation"),
-            "persistence_after_exploit": (["events", "registry"], "Exploitation followed by persistence"),
-            "exfil_after_access": (["memory", "hunt"], "Access followed by data hunting"),
+            "recon_to_exploit": {
+                "required": ["filesystem", "events"],
+                "description": "Reconnaissance followed by exploitation",
+            },
+            "persistence_after_exploit": {
+                "required": ["events", "registry"],
+                "description": "Exploitation followed by persistence",
+            },
+            "exfil_after_access": {
+                "required": ["memory", "hunt"],
+                "description": "Access followed by data hunting",
+            },
         }
 
-        for pattern_name, (required_sources, desc) in patterns.items():
-            found = [s for s in sources if s in required_sources]
-            if len(set(found)) == len(required_sources):
+        for pattern_name, spec in patterns.items():
+            required = spec["required"]
+            # Find first occurrence index of each required source
+            positions = []
+            for source in required:
+                try:
+                    idx = sources.index(source)
+                    positions.append(idx)
+                except ValueError:
+                    # Source not present at all
+                    break
+
+            # All sources found AND in temporal order
+            if len(positions) == len(required) and positions == sorted(positions):
                 anomalies.append({
                     "type": "attack_pattern",
                     "pattern": pattern_name,
                     "score": 7.0,
-                    "description": f"Potential attack pattern: {desc}",
+                    "description": f"Potential attack pattern: {spec['description']}",
                     "severity": "high",
                 })
 

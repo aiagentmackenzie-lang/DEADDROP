@@ -4,7 +4,6 @@ import uuid
 import re
 import json
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 

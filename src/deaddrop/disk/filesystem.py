@@ -133,7 +133,7 @@ class FilesystemAnalyzer:
                             pass
 
             walk_dir(root)
-        except Exception as e:
+        except Exception:
             # Fallback to raw analysis
             return self._analyze_raw(image_path)
 

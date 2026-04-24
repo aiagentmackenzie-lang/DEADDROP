@@ -1,7 +1,6 @@
 """YARA scanner — scan evidence with YARA rules."""
 
 import uuid
-import json
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -163,7 +162,7 @@ class YARAScanner:
             try:
                 compiled = yara.compile(source=rule_source)
                 compiled_rules[name] = compiled
-            except yara.Error as e:
+            except yara.Error:
                 continue
 
         # Get evidence files

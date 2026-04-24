@@ -3,7 +3,6 @@
 import hashlib
 import uuid
 from pathlib import Path
-from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager

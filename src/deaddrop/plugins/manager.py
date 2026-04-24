@@ -6,7 +6,6 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable
 
-from deaddrop.core.case import CaseManager
 from deaddrop.core.config import Config
 
 
@@ -109,9 +108,11 @@ class PluginManager:
                     spec.loader.exec_module(module)
                     entry_point = getattr(module, "run", lambda case_id, **kw: {"status": "ok"})
                 else:
-                    entry_point = lambda case_id, **kw: {"status": "no_entry"}
+                    def entry_point(case_id, **kw):  # type: ignore[misc]
+                        return {"status": "no_entry"}
             else:
-                entry_point = lambda case_id, **kw: {"status": "no_file"}
+                def entry_point(case_id, **kw):  # type: ignore[misc]
+                    return {"status": "no_file"}
 
             self.plugins[name] = Plugin(
                 name=name,

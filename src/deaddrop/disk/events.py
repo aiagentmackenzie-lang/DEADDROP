@@ -3,8 +3,6 @@
 import uuid
 import struct
 from pathlib import Path
-from datetime import datetime, timezone
-from xml.etree import ElementTree
 
 from deaddrop.core.case import CaseManager
 
@@ -95,37 +93,22 @@ class EventLogAnalyzer:
         }
 
     def _extract_event_artifacts(self, evidence: dict, source: str | None = None) -> list[dict]:
-        """Extract event log artifacts based on known security events."""
-        artifacts = []
+        """Extract event log artifacts from parsed EVTX files.
 
-        for event_id, info in SECURITY_EVENTS.items():
-            if source and source != "Security" and not event_id.startswith("7"):
-                continue
-            if source and source == "Security" and event_id.startswith("7"):
-                continue
-
-            severity = info["severity"]
-            category = "security" if event_id in ("4624", "4625", "4634", "4648", "4672", "4688", "4768", "4769", "4770", "4771", "4776", "1102") else "system"
-
-            artifacts.append({
-                "event_id": event_id,
-                "event_name": info["name"],
-                "category": category,
-                "description": f"Event {event_id}: {info['name']}",
-                "severity": severity,
-                "timestamp": "",
-                "source": "Security" if not event_id.startswith("7") else "System",
-            })
-
-        return artifacts
+        SECURITY_EVENTS is used as a lookup for classifying found events,
+        NOT as a source of fake artifacts. Returns empty list unless
+        actual EVTX files are parsed.
+        """
+        # No fake artifacts — only produce results from actual parsing
+        return []
 
     def parse_evtx(self, evtx_path: Path) -> list[dict]:
         """Parse a Windows EVTX file.
-        
+
         Basic EVTX parser — reads the file header and chunk structures.
         For production use, integrate with python-evtx library.
         """
-        events = []
+        events: list[dict] = []
         if not evtx_path.exists():
             return events
 
@@ -136,11 +119,22 @@ class EventLogAnalyzer:
             if header[:4] != b"ElfFile":
                 return events
 
-            # Parse header fields
+            # Parse header fields — extract metadata for case record
             try:
-                first_chunk = struct.unpack_from("<Q", header, 40)[0]
-                chunk_count = struct.unpack_from("<Q", header, 48)[0]
+                struct.unpack_from("<Q", header, 40)[0]  # first_chunk offset
+                struct.unpack_from("<Q", header, 48)[0]  # chunk_count
             except struct.error:
                 return events
+
+            # Record that we found a valid EVTX file
+            events.append({
+                "event_id": "header",
+                "event_name": "EVTX File Parsed",
+                "category": "evtx_metadata",
+                "description": f"Valid EVTX file: {evtx_path.name}",
+                "severity": "info",
+                "timestamp": "",
+                "source": evtx_path.stem,
+            })
 
         return events

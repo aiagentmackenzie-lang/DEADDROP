@@ -5,7 +5,6 @@ import subprocess
 import json
 import shutil
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 

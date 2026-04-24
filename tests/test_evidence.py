@@ -1,8 +1,6 @@
 """Tests for evidence manager."""
 
 import pytest
-import tempfile
-from pathlib import Path
 
 from deaddrop.core.case import CaseManager
 from deaddrop.core.evidence import EvidenceManager, compute_hashes, detect_format, verify_integrity

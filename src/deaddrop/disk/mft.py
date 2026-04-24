@@ -1,6 +1,5 @@
 """MFT parser — parse Windows Master File Table entries."""
 
-import uuid
 import struct
 from pathlib import Path
 from datetime import datetime, timezone
@@ -79,10 +78,12 @@ class MFTParser:
     def _parse_entry(self, data: bytes, offset: int) -> dict | None:
         """Parse a single MFT entry."""
         try:
-            # Entry header
-            signature = data[:4]
-            fixup_offset = struct.unpack_from("<H", data, 4)[0]
-            fixup_count = struct.unpack_from("<H", data, 6)[0]
+            # Entry header — validate FILE signature
+            if data[:4] != b"FILE":
+                return None
+
+            struct.unpack_from("<H", data, 4)[0]  # fixup_offset
+            struct.unpack_from("<H", data, 6)[0]  # fixup_count
             sequence_number = struct.unpack_from("<H", data, 16)[0]
             flags = struct.unpack_from("<H", data, 22)[0]
             used_size = struct.unpack_from("<I", data, 24)[0]

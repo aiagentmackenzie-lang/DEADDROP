@@ -1,6 +1,5 @@
 """Report generator — HTML and PDF forensic case reports."""
 
-import json
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -56,8 +55,8 @@ class ReportGenerator:
             try:
                 from weasyprint import HTML
                 HTML(string=html).write_pdf(str(path))
-            except ImportError:
-                # Fallback: save as HTML with note
+            except (ImportError, OSError, Exception):
+                # Fallback: save as HTML (weasyprint or system libs not available)
                 html_path = path.with_suffix(".html")
                 html_path.write_text(html, encoding="utf-8")
                 return str(html_path) + " (PDF unavailable — weasyprint not installed, saved as HTML)"

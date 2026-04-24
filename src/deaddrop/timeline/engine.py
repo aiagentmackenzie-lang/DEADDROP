@@ -1,6 +1,5 @@
 """Timeline engine — merge, sort, and filter forensic timeline entries."""
 
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
@@ -15,13 +14,20 @@ class TimelineEngine:
         """Generate a unified timeline from all artifacts in a case."""
         entries = self.mgr.get_timeline(case_id)
 
-        # Also generate entries from artifacts that have timestamps
+        # Build a set of artifact IDs already in the timeline for O(1) lookup
+        existing_artifact_ids = {
+            e["artifact_id"]
+            for e in entries
+            if e.get("artifact_id")
+        }
+
+        # Add entries from artifacts that have timestamps but aren't yet in timeline
         artifacts = self.mgr.list_artifacts(case_id)
         for artifact in artifacts:
-            if artifact.get("timestamp") and not any(
-                e.get("artifact_id") == artifact["id"] for e in entries
+            if (
+                artifact.get("timestamp")
+                and artifact["id"] not in existing_artifact_ids
             ):
-                # This artifact wasn't already in timeline, add it
                 self.mgr.add_timeline_entry(
                     case_id=case_id,
                     source=artifact["source"],
@@ -31,6 +37,7 @@ class TimelineEngine:
                     evidence_id=artifact.get("evidence_id", ""),
                     artifact_id=artifact["id"],
                 )
+                existing_artifact_ids.add(artifact["id"])
 
         # Re-fetch after additions
         entries = self.mgr.get_timeline(case_id)

@@ -3,7 +3,6 @@
 import uuid
 import struct
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
@@ -93,24 +92,13 @@ class RegistryAnalyzer:
         }
 
     def _extract_registry_artifacts(self, evidence: dict) -> list[dict]:
-        """Extract registry artifacts from evidence metadata and known patterns."""
-        artifacts = []
+        """Extract registry artifacts from evidence.
 
-        # If we can find actual hive files, parse them
-        # For now, generate analysis-ready artifact records from known forensic keys
-        for category, key_paths in FORENSIC_KEYS.items():
-            for key_path in key_paths:
-                severity = "high" if category in ("run_keys", "persistence") else "info"
-                artifacts.append({
-                    "category": category,
-                    "key_path": key_path,
-                    "description": f"Registry key: {key_path} (forensic category: {category})",
-                    "severity": severity,
-                    "timestamp": "",
-                    "values": [],
-                })
-
-        return artifacts
+        FORENSIC_KEYS is used as reference for classification only.
+        Returns empty list unless actual hive files are parsed.
+        """
+        # No fake artifacts — only produce results from actual hive parsing
+        return []
 
     def parse_hive(self, hive_path: Path) -> list[dict]:
         """Parse a raw registry hive file.

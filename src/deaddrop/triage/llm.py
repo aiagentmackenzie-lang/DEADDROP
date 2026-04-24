@@ -1,7 +1,5 @@
 """LLM summarizer — generate case summaries using Ollama."""
 
-import json
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
@@ -117,12 +115,12 @@ Provide a clear, professional summary:"""
     def _generate_rule_summary(self, case, evidence, artifacts, timeline, hunt_results) -> str:
         """Fallback: generate summary using rules (no LLM)."""
         parts = [
-            f"═══ DEADDROP Case Summary ═══",
-            f"",
+            "═══ DEADDROP Case Summary ═══",
+            "",
             f"Case: {case.name} ({case.id})",
             f"Analyst: {case.analyst or 'N/A'}",
             f"Created: {case.created_at[:19]}",
-            f"",
+            "",
             f"── Evidence: {len(evidence)} items ──",
         ]
 
@@ -137,13 +135,13 @@ Provide a clear, professional summary:"""
             source_counts[a.get("source", "unknown")] = source_counts.get(a.get("source", "unknown"), 0) + 1
 
         parts.extend([
-            f"",
+            "",
             f"── Artifacts: {len(artifacts)} total ──",
             f"  Severity: {dict(severity_counts)}",
             f"  Sources: {dict(source_counts)}",
-            f"",
+            "",
             f"── Timeline: {len(timeline)} entries ──",
-            f"",
+            "",
             f"── Hunt Results: {len(hunt_results)} hits ──",
         ])
 
@@ -163,10 +161,10 @@ Provide a clear, professional summary:"""
             risk = "LOW — No high-severity findings"
 
         parts.extend([
-            f"",
+            "",
             f"── Risk Assessment: {risk} ──",
-            f"",
-            f"── Recommended Actions ──",
+            "",
+            "── Recommended Actions ──",
         ])
 
         if critical > 0:

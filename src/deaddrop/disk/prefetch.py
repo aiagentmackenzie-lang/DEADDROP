@@ -3,7 +3,6 @@
 import uuid
 import struct
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
@@ -57,39 +56,15 @@ class PrefetchAnalyzer:
         }
 
     def _extract_prefetch_artifacts(self, evidence: dict) -> list[dict]:
-        """Extract prefetch execution records."""
-        # Known suspicious executables that appear in prefetch
-        suspicious_executables = {
-            "psexec.exe": "high",
-            "mimikatz.exe": "critical",
-            "procdump.exe": "high",
-            "nc.exe": "high",
-            "ncat.exe": "high",
-            "p0f.exe": "medium",
-            "nmap.exe": "medium",
-            "wireshark.exe": "low",
-            "cmd.exe": "info",
-            "powershell.exe": "info",
-            "wmic.exe": "medium",
-            "certutil.exe": "high",
-            "bitsadmin.exe": "high",
-            "mshta.exe": "high",
-            "wscript.exe": "medium",
-            "cscript.exe": "medium",
-            "rundll32.exe": "medium",
-        }
+        """Extract prefetch execution records.
 
-        artifacts = []
-        for exe, severity in suspicious_executables.items():
-            artifacts.append({
-                "executable": exe,
-                "description": f"Prefetch: {exe} executed (known {severity} severity tool)",
-                "severity": severity,
-                "timestamp": "",
-                "prefetch_file": f"C:\\Windows\\Prefetch\\{exe.upper()[:7]}-XXXXXXXX.pf",
-            })
-
-        return artifacts
+        Returns empty list by default — actual prefetch file parsing
+        via parse_prefetch_file() is needed to produce artifacts.
+        Known suspicious executables are checked only against
+        genuinely parsed prefetch entries.
+        """
+        # No fake artifacts — must parse actual .pf files
+        return []
 
     def parse_prefetch_file(self, pf_path: Path) -> dict | None:
         """Parse a single Windows prefetch file (MAM format).
@@ -113,7 +88,13 @@ class PrefetchAnalyzer:
         return None
 
     def _parse_v23(self, data: bytes, path: Path) -> dict:
-        """Parse Windows 7/8 prefetch format (version 23/26)."""
+        """Parse Windows 7/8 prefetch format (version 23/26).
+
+        Layout (simplified):
+        - Offset 0: Version (4 bytes)
+        - Offset 4: Run count (4 bytes)
+        - Offset 8: Executable name (64 bytes, UTF-16-LE)
+        """
         try:
             executable = data[8:72].decode("utf-16-le", errors="replace").rstrip("\x00")
             run_count = struct.unpack_from("<I", data, 4)[0]
@@ -127,10 +108,27 @@ class PrefetchAnalyzer:
             return {"executable": path.stem, "run_count": 0, "version": 23, "path": str(path)}
 
     def _parse_v30(self, data: bytes, path: Path) -> dict:
-        """Parse Windows 10+ prefetch format (version 30)."""
+        """Parse Windows 10+ prefetch format (version 30).
+
+        Layout (simplified — v30 has a different header structure):
+        - Offset 0: Version (4 bytes)
+        - Offset 4: Signature (4 bytes, 'SCCA' = 0x41434353)
+        - Offset 8: Run count (4 bytes)
+        - Offset 12: Executable name offset (4 bytes)
+        - The executable name is stored at a dynamic offset
+          pointed to by offset 12, as UTF-16-LE null-terminated.
+        """
         try:
-            executable = data[8:72].decode("utf-16-le", errors="replace").rstrip("\x00")
-            run_count = struct.unpack_from("<I", data, 4)[0]
+            run_count = struct.unpack_from("<I", data, 8)[0]
+            # Read executable name from dynamic offset
+            name_offset = struct.unpack_from("<I", data, 12)[0]
+            if name_offset < len(data) - 2:
+                # Read up to 64 bytes of UTF-16-LE from the name offset
+                name_end = min(name_offset + 128, len(data))
+                raw_name = data[name_offset:name_end]
+                executable = raw_name.decode("utf-16-le", errors="replace").rstrip("\x00")
+            else:
+                executable = path.stem
             return {
                 "executable": executable,
                 "run_count": run_count,

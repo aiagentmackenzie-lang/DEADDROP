@@ -1,6 +1,5 @@
 """PDF export via WeasyPrint."""
 
-from pathlib import Path
 
 
 def html_to_pdf(html_content: str, output_path: str) -> str:

@@ -1,7 +1,5 @@
 """Memory analyzer — extract and correlate memory artifacts."""
 
-import uuid
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 from deaddrop.memory.volatility import VolatilityWrapper

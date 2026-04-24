@@ -1,7 +1,7 @@
 """Configuration management."""
 
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import json
 
 DEFAULT_DB_PATH = Path.home() / ".deaddrop" / "cases.db"
