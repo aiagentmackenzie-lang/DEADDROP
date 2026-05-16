@@ -250,7 +250,7 @@ def hunt():
 @click.option("--case", "-c", "case_id", required=True, help="Case ID")
 @click.option("--yara", "-y", "yara_rules", default=None, help="Path to YARA rules file/dir")
 @click.option("--ioc", default=None, help="Path to IOC JSON file")
-@click.option("--pack", "-p", type=click.Choice(["persistence", "lateral_movement", "exfiltration", "malware"]), default=None)
+@click.option("--pack", "-p", type=click.Choice(["persistence", "lateral_movement", "exfiltration"]), default=None)
 def hunt_run(case_id: str, yara_rules: str | None, ioc: str | None, pack: str | None):
     """Run artifact hunt across evidence."""
     from deaddrop.hunt.yara_scanner import YARAScanner
@@ -391,15 +391,30 @@ def report_generate(case_id: str, fmt: str, output: str | None):
 @click.option("--port", "-p", default=8080, help="Port number")
 @click.option("--host", "-h", default="0.0.0.0", help="Host")
 def dashboard(port: int, host: str):
-    """Launch the web dashboard."""
+    """Launch the web dashboard (Fastify API server)."""
     import subprocess
-    import sys
+    import os as _os
     server_dir = Path(__file__).parent.parent.parent.parent / "server"
     if not server_dir.exists():
-        console.print("[red]Server directory not found. Run 'deaddrop setup' first.[/red]")
+        console.print("[red]Server directory not found. Install the server dependencies first:[/red]")
+        console.print("  cd server && npm install")
         return
+    # Check if npm is available
+    try:
+        subprocess.run(["npm", "--version"], capture_output=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        console.print("[red]npm not found. Install Node.js to run the dashboard.[/red]")
+        return
+    # Install deps if needed
+    if not (server_dir / "node_modules").exists():
+        console.print("[bold]Installing server dependencies...[/bold]")
+        subprocess.run(["npm", "install"], cwd=str(server_dir), check=True)
+    # Start the server
     console.print(f"[bold]Launching DEADDROP dashboard on {host}:{port}...[/bold]")
-    subprocess.run([sys.executable, "-m", "deaddrop.dashboard_server", "--host", host, "--port", str(port)])
+    console.print(f"  API:     http://{host}:{port}")
+    console.print("  Dashboard: http://localhost:3000 (start separately: cd dashboard && npm run dev)")
+    env = {**_os.environ, "HOST": host, "PORT": str(port)}
+    subprocess.run(["npx", "tsx", "src/index.ts"], cwd=str(server_dir), env=env)
 
 
 # ── Plugin commands ───────────────────────────────────────────

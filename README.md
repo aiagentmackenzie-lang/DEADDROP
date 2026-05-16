@@ -3,7 +3,7 @@
 **Unified DFIR toolkit with AI-assisted triage, modern web dashboard, and automated reporting.**
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://python.org)
-[![Tests: 89 passing](https://img.shields.io/badge/Tests-89%20passing-brightgreen.svg)](tests/)
+[![Tests: 128 passing](https://img.shields.io/badge/Tests-128%20passing-brightgreen.svg)](tests/)
 [![Lint: 0 errors](https://img.shields.io/badge/Ruff-0%20errors-green.svg)](https://docs.astral.sh/ruff/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -48,7 +48,7 @@ source .venv/bin/activate
 pip install -e .
 
 # Or with all extras
-pip install -e ".[disk,memory,dev]"
+pip install -e ".[disk,memory,pdf,dev]"
 ```
 
 ### Create a Case
@@ -87,7 +87,7 @@ deaddrop analyze prefetch --case <case-id>
 # YARA scan with custom rules
 deaddrop hunt run --case <case-id> --yara /path/to/rules/
 
-# Pre-built hunt pack
+# Pre-built hunt packs (persistence, lateral_movement, exfiltration)
 deaddrop hunt run --case <case-id> --pack persistence
 
 # IOC matching
@@ -147,12 +147,24 @@ docker-compose up
 Dashboard: http://localhost:3000  
 API: http://localhost:8080
 
+Or start the API server directly (requires Node.js):
+
+```bash
+cd server && npm install && npm run dev
+```
+
+Then in a separate terminal for the dashboard:
+
+```bash
+cd dashboard && npm install && npm run dev
+```
+
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Run full test suite (89 tests)
+# Run full test suite (128 tests)
 pytest tests/ -v
 
 # Lint check (0 errors)
@@ -201,7 +213,7 @@ DEADDROP/
 ├── server/               # Fastify API server (TypeScript)
 ├── dashboard/            # React 19 + D3 dashboard
 ├── rules/                # YARA rules (malware, persistence, suspicious)
-├── tests/                # pytest test suite (89 tests)
+├── tests/                # pytest test suite (128 tests)
 └── docs/                 # Documentation
 ```
 
@@ -212,9 +224,9 @@ DEADDROP/
 | Type | Formats |
 |------|---------|
 | **Disk** | RAW/DD, E01, VMDK, QCOW2, ISO, IMG |
-| **Memory** | RAW, VMEM, Windows Crash Dump, ELF64, Windows Minidump |
+| **Memory** | RAW, VMEM, Windows Crash Dump (.dmp), ELF64 |
 
-Format detection uses both file extension and magic bytes (EWF, KDMV, QFI\xfb, ELF, MDMP, PAGE).
+Format detection uses both file extension and magic bytes (EWF, KDMV, QFI\xfb, ELF, MDMP, PAGE). Windows Minidump (MDMP magic) is also detected within .dmp files.
 
 ---
 
