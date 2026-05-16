@@ -24,7 +24,7 @@ SIGNATURES = {
     },
     "GIF": {
         "header": b"GIF8",
-        "footer": b"\x00\x3b",
+        "footer": b"\x3b",
         "extension": ".gif",
         "max_size": 20 * 1024 * 1024,
     },
@@ -34,12 +34,9 @@ SIGNATURES = {
         "extension": ".zip",
         "max_size": 500 * 1024 * 1024,
     },
-    "DOCX": {
-        "header": b"PK\x03\x04",
-        "footer": b"PK\x05\x06",
-        "extension": ".docx",
-        "max_size": 100 * 1024 * 1024,
-    },
+    # NOTE: DOCX/DOC/PPTX/XLSX are ZIP-based (same PK header/footer).
+    # They cannot be distinguished from ZIP by signature alone.
+    # Carved as .zip; analysts can inspect content to identify Office docs.
 }
 
 # Default read chunk size for streaming carve (4MB — reasonable for most images)
@@ -123,9 +120,11 @@ class FileCarver:
 
                             pos = footer_pos + len(sig["footer"])
                         else:
-                            # Footer not found in this chunk.
-                            # For simplicity, skip — a full implementation would
-                            # continue reading to find the footer.
+                            # Footer not found in current chunk.
+                            # Known limitation: files whose footer falls in the next
+                            # chunk are silently skipped. A full implementation would
+                            # buffer the header region and continue reading until the
+                            # footer is found or max_size is exceeded.
                             pos = header_pos + len(sig["header"])
 
                 # Carry overlap bytes for next iteration

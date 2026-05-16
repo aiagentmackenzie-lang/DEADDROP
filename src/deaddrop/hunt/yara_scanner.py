@@ -186,7 +186,7 @@ class YARAScanner:
                             if match.meta and "severity" in match.meta:
                                 severity = match.meta["severity"]
 
-                            result_id = str(uuid.uuid4())[:8]
+                            result_id = str(uuid.uuid4())[:12]
                             self.mgr.add_hunt_result(
                                 case_id=case_id,
                                 result_id=result_id,

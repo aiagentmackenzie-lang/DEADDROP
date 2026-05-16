@@ -10,6 +10,9 @@ from deaddrop.core.case import CaseManager
 
 SUPPORTED_DISK_FORMATS = {".dd", ".raw", ".e01", ".vmdk", ".qcow2", ".iso", ".img"}
 SUPPORTED_MEMORY_FORMATS = {".raw", ".vmem", ".dmp", ".elf"}
+# NOTE: .raw appears in both sets. Format detection via detect_format() returns "RAW"
+# for both. The caller (ingest_disk/ingest_memory) determines the type, not the extension.
+# Analysts must explicitly specify the evidence type at ingestion time.
 
 
 def compute_hashes(file_path: Path, chunk_size: int = 8192) -> tuple[str, str]:
@@ -71,7 +74,7 @@ class EvidenceManager:
         if not path.exists():
             raise FileNotFoundError(f"Disk image not found: {image_path}")
 
-        evidence_id = str(uuid.uuid4())[:8]
+        evidence_id = str(uuid.uuid4())[:12]
         fmt = detect_format(path)
         sha256, md5 = compute_hashes(path)
         size = path.stat().st_size
@@ -107,7 +110,7 @@ class EvidenceManager:
         if not path.exists():
             raise FileNotFoundError(f"Memory dump not found: {dump_path}")
 
-        evidence_id = str(uuid.uuid4())[:8]
+        evidence_id = str(uuid.uuid4())[:12]
         fmt = detect_format(path)
         sha256, md5 = compute_hashes(path)
         size = path.stat().st_size

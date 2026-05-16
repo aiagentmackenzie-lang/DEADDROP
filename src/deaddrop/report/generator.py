@@ -1,5 +1,6 @@
 """Report generator — HTML and PDF forensic case reports."""
 
+import html as html_module
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -46,53 +47,58 @@ class ReportGenerator:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         if fmt == "html":
-            html = self._render_html(case, evidence, artifacts, timeline, hunt_results,
+            html_content = self._render_html(case, evidence, artifacts, timeline, hunt_results,
                                      severity_counts, source_counts)
-            path.write_text(html, encoding="utf-8")
+            path.write_text(html_content, encoding="utf-8")
         elif fmt == "pdf":
-            html = self._render_html(case, evidence, artifacts, timeline, hunt_results,
+            html_content = self._render_html(case, evidence, artifacts, timeline, hunt_results,
                                      severity_counts, source_counts)
             try:
                 from weasyprint import HTML
-                HTML(string=html).write_pdf(str(path))
-            except (ImportError, OSError, Exception):
+                HTML(string=html_content).write_pdf(str(path))
+            except (ImportError, OSError, Exception) as e:
                 # Fallback: save as HTML (weasyprint or system libs not available)
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"PDF generation failed ({type(e).__name__}: {e}), saving as HTML instead"
+                )
                 html_path = path.with_suffix(".html")
-                html_path.write_text(html, encoding="utf-8")
+                html_path.write_text(html_content, encoding="utf-8")
                 return str(html_path) + " (PDF unavailable — weasyprint not installed, saved as HTML)"
 
         return str(path)
 
     def _render_html(self, case, evidence, artifacts, timeline, hunt_results,
                      severity_counts, source_counts) -> str:
-        """Render case report as HTML."""
+        """Render case report as HTML with XSS-safe escaping."""
+        esc = html_module.escape  # XSS-safe escaping
         high_artifacts = [a for a in artifacts if a.get("severity") in ("high", "critical")]
 
-        # Build evidence table rows
+        # Build evidence table rows — all user-controlled fields escaped
         evidence_rows = ""
         for ev in evidence:
             size_mb = ev['size_bytes'] / (1024 * 1024)
             evidence_rows += f"""
                 <tr>
-                    <td>{ev['id']}</td>
-                    <td>{ev['filename']}</td>
-                    <td>{ev['type']}</td>
-                    <td>{ev['format']}</td>
+                    <td>{esc(ev['id'])}</td>
+                    <td>{esc(ev['filename'])}</td>
+                    <td>{esc(ev['type'])}</td>
+                    <td>{esc(ev['format'])}</td>
                     <td>{size_mb:.1f} MB</td>
-                    <td class="mono">{ev['sha256'][:32]}...</td>
+                    <td class="mono">{esc(ev['sha256'][:32])}...</td>
                     <td>✓</td>
                 </tr>"""
 
-        # Build high-severity artifact rows
+        # Build high-severity artifact rows — severity is enum-safe but source/desc need escaping
         high_rows = ""
         for a in high_artifacts[:50]:
-            sev_class = f"severity-{a['severity']}"
+            sev_class = f"severity-{esc(a['severity'])}"
             high_rows += f"""
                 <tr class="{sev_class}">
-                    <td>{a.get('timestamp', '')[:19]}</td>
-                    <td>{a['source']}</td>
-                    <td>{a['severity'].upper()}</td>
-                    <td>{a['description']}</td>
+                    <td>{esc(a.get('timestamp', '')[:19])}</td>
+                    <td>{esc(a['source'])}</td>
+                    <td>{esc(a['severity'].upper())}</td>
+                    <td>{esc(a['description'])}</td>
                 </tr>"""
 
         # Build hunt result rows
@@ -100,10 +106,10 @@ class ReportGenerator:
         for h in hunt_results[:50]:
             hunt_rows += f"""
                 <tr>
-                    <td>{h['rule_name']}</td>
-                    <td>{h['rule_type']}</td>
-                    <td class="severity-{h['severity']}">{h['severity'].upper()}</td>
-                    <td>{h.get('detected_at', '')[:19]}</td>
+                    <td>{esc(h['rule_name'])}</td>
+                    <td>{esc(h['rule_type'])}</td>
+                    <td class="severity-{esc(h['severity'])}">{esc(h['severity'].upper())}</td>
+                    <td>{esc(h.get('detected_at', '')[:19])}</td>
                 </tr>"""
 
         # Timeline summary (last 50 entries)
@@ -112,10 +118,10 @@ class ReportGenerator:
         for t in tl_entries:
             tl_rows += f"""
                 <tr>
-                    <td>{t.get('timestamp', '')[:19]}</td>
-                    <td>{t.get('source', '')}</td>
-                    <td class="severity-{t.get('severity', 'info')}">{t.get('severity', 'info').upper()}</td>
-                    <td>{t.get('description', '')}</td>
+                    <td>{esc(t.get('timestamp', '')[:19])}</td>
+                    <td>{esc(t.get('source', ''))}</td>
+                    <td class="severity-{esc(t.get('severity', 'info'))}">{esc(t.get('severity', 'info').upper())}</td>
+                    <td>{esc(t.get('description', ''))}</td>
                 </tr>"""
 
         # Risk assessment
@@ -136,12 +142,30 @@ class ReportGenerator:
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+        # Severity and source distribution rows — keys are enum values but escape defensively
+        sev_rows = " ".join(
+            f'<tr><td class="severity-{esc(sev)}">{esc(sev.upper())}</td><td>{count}</td></tr>'
+            for sev, count in severity_counts.items()
+        )
+        src_rows = " ".join(
+            f'<tr><td>{esc(src)}</td><td>{count}</td></tr>'
+            for src, count in source_counts.items()
+        )
+
+        # Showing N of M note
+        showing_note = ""
+        if len(high_artifacts) > 50:
+            showing_note = (
+                f'<p style="color: #64748b; font-style: italic; margin-top: 0.5rem;">'
+                f'Showing {min(len(high_artifacts), 50)} of {len(high_artifacts)} high/critical findings</p>'
+            )
+
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DEADDROP Forensic Report — {case.name}</title>
+    <title>DEADDROP Forensic Report — {esc(case.name)}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1e293b; background: #f8fafc; padding: 2rem; }}
@@ -199,12 +223,12 @@ class ReportGenerator:
         <h2>📋 Case Information</h2>
         <table>
             <tr><th>Field</th><th>Value</th></tr>
-            <tr><td>Case Name</td><td>{case.name}</td></tr>
-            <tr><td>Case ID</td><td class="mono">{case.id}</td></tr>
-            <tr><td>Analyst</td><td>{case.analyst or 'N/A'}</td></tr>
-            <tr><td>Status</td><td>{case.status}</td></tr>
-            <tr><td>Created</td><td>{case.created_at[:19]}</td></tr>
-            <tr><td>Report Generated</td><td>{now}</td></tr>
+            <tr><td>Case Name</td><td>{esc(case.name)}</td></tr>
+            <tr><td>Case ID</td><td class="mono">{esc(case.id)}</td></tr>
+            <tr><td>Analyst</td><td>{esc(case.analyst or 'N/A')}</td></tr>
+            <tr><td>Status</td><td>{esc(case.status)}</td></tr>
+            <tr><td>Created</td><td>{esc(case.created_at[:19])}</td></tr>
+            <tr><td>Report Generated</td><td>{esc(now)}</td></tr>
         </table>
     </div>
 
@@ -225,7 +249,7 @@ class ReportGenerator:
             <tr><th>Timestamp</th><th>Source</th><th>Severity</th><th>Description</th></tr>
             {high_rows}
         </table>
-        {f'<p style="color: #64748b; font-style: italic; margin-top: 0.5rem;">Showing {min(len(high_artifacts), 50)} of {len(high_artifacts)} high/critical findings</p>' if len(high_artifacts) > 50 else ''}
+        {showing_note}
     </div>
 
     <div class="section">
@@ -248,7 +272,7 @@ class ReportGenerator:
         <h2>📊 Severity Distribution</h2>
         <table>
             <tr><th>Severity</th><th>Count</th></tr>
-            {" ".join(f'<tr><td class="severity-{sev}">{sev.upper()}</td><td>{count}</td></tr>' for sev, count in severity_counts.items())}
+            {sev_rows}
         </table>
     </div>
 
@@ -256,12 +280,12 @@ class ReportGenerator:
         <h2>📁 Source Distribution</h2>
         <table>
             <tr><th>Source</th><th>Count</th></tr>
-            {" ".join(f'<tr><td>{src}</td><td>{count}</td></tr>' for src, count in source_counts.items())}
+            {src_rows}
         </table>
     </div>
 
     <div style="text-align: center; color: #94a3b8; padding: 2rem; font-size: 0.8rem;">
-        Generated by DEADDROP Digital Forensics Toolkit v1.0.0 — {now}
+        Generated by DEADDROP Digital Forensics Toolkit v1.0.0 — {esc(now)}
     </div>
 </body>
 </html>"""

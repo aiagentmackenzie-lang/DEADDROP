@@ -1,7 +1,6 @@
 """Suspicious Processes Plugin — Flag known malicious/suspicious process names."""
 
 from deaddrop.core.case import CaseManager
-from deaddrop.core.config import Config
 
 
 SUSPICIOUS_PROCESSES = {
@@ -30,11 +29,18 @@ SUSPICIOUS_PROCESSES = {
 }
 
 
-def run(case_id: str, **kwargs) -> dict:
-    """Check memory artifacts for suspicious processes."""
-    config = Config.load()
-    mgr = CaseManager(config.db_path)
-    artifacts = mgr.list_artifacts(case_id, source="memory")
+def run(case_id: str, case_manager: CaseManager | None = None, **kwargs) -> dict:
+    """Check memory artifacts for suspicious processes.
+
+    Accepts an optional case_manager to reuse the existing connection.
+    Falls back to Config defaults when not provided (legacy mode).
+    """
+    if case_manager is None:
+        from deaddrop.core.config import Config
+        config = Config.load()
+        case_manager = CaseManager(config.db_path)
+
+    artifacts = case_manager.list_artifacts(case_id, source="memory")
 
     findings = {"suspicious": [], "total_checked": 0}
 
@@ -51,5 +57,4 @@ def run(case_id: str, **kwargs) -> dict:
                     "artifact_id": artifact.get("id", ""),
                 })
 
-    mgr.close()
     return findings

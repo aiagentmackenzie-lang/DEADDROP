@@ -63,7 +63,10 @@ class TimelineExporter:
         Body file format:
         MD5|name|inode|mode_as_string|UID|GID|size|atime|mtime|ctime|crtime
         """
+        from deaddrop.timeline.bodyfile import BODY_FILE_HEADER
+
         with open(path, "w", encoding="utf-8") as f:
+            f.write(BODY_FILE_HEADER)
             for entry in entries:
                 # Convert ISO timestamp to Unix epoch
                 ts = self._iso_to_epoch(entry.get("timestamp", ""))

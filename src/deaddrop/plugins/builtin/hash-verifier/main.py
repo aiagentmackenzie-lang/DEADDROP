@@ -2,15 +2,21 @@
 
 from pathlib import Path
 from deaddrop.core.case import CaseManager
-from deaddrop.core.config import Config
 from deaddrop.core.evidence import compute_hashes
 
 
-def run(case_id: str, **kwargs) -> dict:
-    """Re-verify all evidence in a case."""
-    config = Config.load()
-    mgr = CaseManager(config.db_path)
-    evidence = mgr.list_evidence(case_id)
+def run(case_id: str, case_manager: CaseManager | None = None, **kwargs) -> dict:
+    """Re-verify all evidence in a case.
+
+    Accepts an optional case_manager to reuse the existing connection.
+    Falls back to Config defaults when not provided (legacy mode).
+    """
+    if case_manager is None:
+        from deaddrop.core.config import Config
+        config = Config.load()
+        case_manager = CaseManager(config.db_path)
+
+    evidence = case_manager.list_evidence(case_id)
 
     results = {"total": len(evidence), "verified": 0, "failed": 0, "missing": 0}
 
@@ -30,5 +36,4 @@ def run(case_id: str, **kwargs) -> dict:
                 "current_sha256": current_sha256,
             }
 
-    mgr.close()
     return results

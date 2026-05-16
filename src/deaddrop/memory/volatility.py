@@ -59,8 +59,15 @@ class VolatilityWrapper:
                 return str(p)
         return "vol"
 
+    # Allowed Volatility3 plugins — prevents command injection via plugin name
+    ALLOWED_PLUGINS = set(DEFAULT_PLUGINS.keys())
+
     def run_plugin(self, case_id: str, evidence_id: str | None, plugin: str) -> dict:
         """Run a Volatility3 plugin against memory evidence in a case."""
+        # Validate plugin name to prevent command injection
+        if plugin not in self.ALLOWED_PLUGINS:
+            return {"findings_count": 0, "error": f"Unknown plugin: {plugin}"}
+
         evidence_list = self.mgr.list_evidence(case_id)
         memory_evidence = [e for e in evidence_list if e["type"] == "memory"]
         if evidence_id:
@@ -84,7 +91,7 @@ class VolatilityWrapper:
                         description=finding.get("description", ""),
                         severity=finding.get("severity", "info"),
                         data=str(finding),
-                        artifact_id=str(uuid.uuid4())[:8],
+                        artifact_id=str(uuid.uuid4())[:12],
                     )
                     if finding.get("timestamp"):
                         self.mgr.add_timeline_entry(
@@ -145,8 +152,15 @@ class VolatilityWrapper:
     def _parse_tabular_output(self, output: str, plugin: str) -> dict:
         """Parse Volatility3 tabular text output into findings."""
         findings = []
-        for line in output.strip().split("\n"):
+        lines = output.strip().split("\n")
+        # Skip header row (first non-separator line) and Volatility banner
+        header_skipped = False
+        for line in lines:
             if not line or line.startswith("Volatility") or line.startswith("="):
+                continue
+            # Skip the first data line as column header
+            if not header_skipped:
+                header_skipped = True
                 continue
             findings.append({
                 "description": f"[{plugin}] {line.strip()}",

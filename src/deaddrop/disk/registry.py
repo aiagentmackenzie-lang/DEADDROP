@@ -71,7 +71,7 @@ class RegistryAnalyzer:
                     description=artifact["description"],
                     severity=artifact.get("severity", "info"),
                     data=str(artifact),
-                    artifact_id=str(uuid.uuid4())[:8],
+                    artifact_id=str(uuid.uuid4())[:12],
                 )
                 if artifact.get("timestamp"):
                     self.mgr.add_timeline_entry(
@@ -96,6 +96,10 @@ class RegistryAnalyzer:
 
         FORENSIC_KEYS is used as reference for classification only.
         Returns empty list unless actual hive files are parsed.
+
+        Known limitation: analyze() currently returns no artifacts because
+        it needs filesystem-level access to registry hives within disk
+        images. Use parse_hive() directly for extracted hive files.
         """
         # No fake artifacts — only produce results from actual hive parsing
         return []

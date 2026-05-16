@@ -1,14 +1,20 @@
 """Timeline Summary Plugin — Statistical overview of case timeline."""
 
 from deaddrop.core.case import CaseManager
-from deaddrop.core.config import Config
 
 
-def run(case_id: str, **kwargs) -> dict:
-    """Generate timeline statistics."""
-    config = Config.load()
-    mgr = CaseManager(config.db_path)
-    timeline = mgr.get_timeline(case_id)
+def run(case_id: str, case_manager: CaseManager | None = None, **kwargs) -> dict:
+    """Generate timeline statistics.
+
+    Accepts an optional case_manager to reuse the existing connection.
+    Falls back to Config defaults when not provided (legacy mode).
+    """
+    if case_manager is None:
+        from deaddrop.core.config import Config
+        config = Config.load()
+        case_manager = CaseManager(config.db_path)
+
+    timeline = case_manager.get_timeline(case_id)
 
     severity_counts = {}
     source_counts = {}
@@ -23,7 +29,6 @@ def run(case_id: str, **kwargs) -> dict:
     if timestamps:
         time_range = {"earliest": min(timestamps), "latest": max(timestamps)}
 
-    mgr.close()
     return {
         "total_entries": len(timeline),
         "severity_distribution": severity_counts,

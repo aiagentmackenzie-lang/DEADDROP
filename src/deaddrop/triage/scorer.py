@@ -31,14 +31,14 @@ class TriageScorer:
         for anomaly in anomalies:
             self.mgr.add_artifact(
                 case_id=case_id,
-                evidence_id="",
+                evidence_id=None,
                 source="triage",
                 category=anomaly.get("type", "anomaly"),
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 description=anomaly.get("description", ""),
                 severity=anomaly.get("severity", "info"),
                 data=str(anomaly),
-                artifact_id=str(uuid.uuid4())[:8],
+                artifact_id=str(uuid.uuid4())[:12],
             )
 
         return {

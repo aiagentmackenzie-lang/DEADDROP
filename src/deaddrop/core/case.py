@@ -10,7 +10,7 @@ from typing import Optional
 
 @dataclass
 class Case:
-    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
     name: str = ""
     analyst: str = ""
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -60,8 +60,8 @@ CREATE TABLE IF NOT EXISTS evidence (
 CREATE TABLE IF NOT EXISTS artifacts (
     id TEXT PRIMARY KEY,
     case_id TEXT NOT NULL,
-    evidence_id TEXT NOT NULL,
-    source TEXT NOT NULL,  -- filesystem, registry, prefetch, events, memory, hunt
+    evidence_id TEXT,  -- nullable: triage/system artifacts may not reference specific evidence
+    source TEXT NOT NULL,  -- filesystem, registry, prefetch, events, memory, hunt, triage
     category TEXT DEFAULT '',
     timestamp TEXT DEFAULT '',
     description TEXT DEFAULT '',
@@ -109,6 +109,12 @@ class CaseManager:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(db_path))
         self.conn.row_factory = sqlite3.Row
+        # Enable WAL mode for better concurrent write handling
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        # Enable foreign key enforcement
+        self.conn.execute("PRAGMA foreign_keys=ON")
+        # Busy timeout for concurrent access (5 seconds)
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.executescript(SCHEMA)
 
     def create_case(self, name: str, analyst: str = "", notes: str = "") -> Case:
@@ -154,12 +160,19 @@ class CaseManager:
         self.conn.commit()
         return cur.rowcount > 0
 
+    # Allowed columns for update_case — prevents SQL injection via kwargs keys
+    _UPDATABLE_COLUMNS = {"name", "analyst", "status", "notes"}
+
     def update_case(self, case_id: str, **kwargs) -> bool:
         if not kwargs:
             return False
-        kwargs["updated_at"] = datetime.now(timezone.utc).isoformat()
-        sets = ", ".join(f"{k} = ?" for k in kwargs)
-        vals = list(kwargs.values()) + [case_id]
+        # Whitelist column names to prevent SQL injection
+        safe_kwargs = {k: v for k, v in kwargs.items() if k in self._UPDATABLE_COLUMNS}
+        if not safe_kwargs:
+            return False
+        safe_kwargs["updated_at"] = datetime.now(timezone.utc).isoformat()
+        sets = ", ".join(f"{k} = ?" for k in safe_kwargs)
+        vals = list(safe_kwargs.values()) + [case_id]
         cur = self.conn.execute(f"UPDATE cases SET {sets} WHERE id = ?", vals)
         self.conn.commit()
         return cur.rowcount > 0
@@ -187,13 +200,13 @@ class CaseManager:
         rows = self.conn.execute("SELECT * FROM evidence WHERE case_id = ?", (case_id,)).fetchall()
         return [dict(r) for r in rows]
 
-    def add_artifact(self, case_id: str, evidence_id: str, source: str,
+    def add_artifact(self, case_id: str, evidence_id: str | None, source: str,
                      category: str, timestamp: str, description: str,
                      severity: str = "info", data: str = "{}", artifact_id: str = "") -> str:
-        aid = artifact_id or str(uuid.uuid4())[:8]
+        aid = artifact_id or str(uuid.uuid4())[:12]
         self.conn.execute(
             "INSERT INTO artifacts (id, case_id, evidence_id, source, category, timestamp, description, severity, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (aid, case_id, evidence_id, source, category, timestamp, description, severity, data),
+            (aid, case_id, evidence_id or None, source, category, timestamp, description, severity, data),
         )
         self.conn.commit()
         return aid
@@ -207,7 +220,7 @@ class CaseManager:
 
     def add_timeline_entry(self, case_id: str, source: str, timestamp: str,
                            description: str, severity: str = "info",
-                           evidence_id: str = "", artifact_id: str = "") -> int:
+                           evidence_id: str | None = None, artifact_id: str = "") -> int:
         cur = self.conn.execute(
             "INSERT INTO timeline (case_id, evidence_id, source, timestamp, description, severity, artifact_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (case_id, evidence_id or None, source, timestamp, description, severity, artifact_id or None),
@@ -230,7 +243,7 @@ class CaseManager:
 
     def add_hunt_result(self, case_id: str, result_id: str, rule_name: str,
                         rule_type: str, severity: str = "medium",
-                        evidence_id: str = "", match_offset: int = 0,
+                        evidence_id: str | None = None, match_offset: int = 0,
                         match_data: str = "") -> None:
         now = datetime.now(timezone.utc).isoformat()
         self.conn.execute(

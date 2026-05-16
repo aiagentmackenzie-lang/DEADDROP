@@ -34,7 +34,7 @@ class TimelineEngine:
                     timestamp=artifact["timestamp"],
                     description=artifact["description"],
                     severity=artifact.get("severity", "info"),
-                    evidence_id=artifact.get("evidence_id", ""),
+                    evidence_id=artifact.get("evidence_id") or None,
                     artifact_id=artifact["id"],
                 )
                 existing_artifact_ids.add(artifact["id"])

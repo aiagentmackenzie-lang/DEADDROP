@@ -120,9 +120,10 @@ class MFTParser:
                             filename = data[name_pos:name_pos + name_len * 2].decode("utf-16-le", errors="replace")
 
                 elif attr_type == 0x10 and attr_len > 72:  # $STANDARD_INFORMATION
-                    si_offset = struct.unpack_from("<H", data, pos + 6)[0]
-                    si_pos = pos + si_offset
-                    if si_pos + 72 <= len(data):
+                    # Content offset is relative to the attribute start
+                    si_content_offset = struct.unpack_from("<H", data, pos + 6)[0]
+                    si_pos = pos + si_content_offset
+                    if si_pos + 32 <= len(data):
                         # Windows FILETIME timestamps (100ns intervals since 1601-01-01)
                         crtime = struct.unpack_from("<Q", data, si_pos)[0]
                         mtime = struct.unpack_from("<Q", data, si_pos + 8)[0]

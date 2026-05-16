@@ -50,7 +50,7 @@ class FilesystemAnalyzer:
                     description=entry.get("description", ""),
                     severity=entry.get("severity", "info"),
                     data=str(entry),
-                    artifact_id=str(uuid.uuid4())[:8],
+                    artifact_id=str(uuid.uuid4())[:12],
                 )
                 # Add to timeline
                 if entry.get("timestamp"):

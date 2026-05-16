@@ -35,7 +35,7 @@ class PrefetchAnalyzer:
                     description=artifact["description"],
                     severity=artifact.get("severity", "info"),
                     data=str(artifact),
-                    artifact_id=str(uuid.uuid4())[:8],
+                    artifact_id=str(uuid.uuid4())[:12],
                 )
                 if artifact.get("timestamp"):
                     self.mgr.add_timeline_entry(
@@ -62,6 +62,10 @@ class PrefetchAnalyzer:
         via parse_prefetch_file() is needed to produce artifacts.
         Known suspicious executables are checked only against
         genuinely parsed prefetch entries.
+
+        Known limitation: analyze() currently returns no artifacts because
+        it needs filesystem-level access to prefetch .pf files within disk
+        images. Use parse_prefetch_file() directly for extracted .pf files.
         """
         # No fake artifacts — must parse actual .pf files
         return []
@@ -110,25 +114,38 @@ class PrefetchAnalyzer:
     def _parse_v30(self, data: bytes, path: Path) -> dict:
         """Parse Windows 10+ prefetch format (version 30).
 
-        Layout (simplified — v30 has a different header structure):
+        Layout (v30 header):
         - Offset 0: Version (4 bytes)
-        - Offset 4: Signature (4 bytes, 'SCCA' = 0x41434353)
-        - Offset 8: Run count (4 bytes)
-        - Offset 12: Executable name offset (4 bytes)
-        - The executable name is stored at a dynamic offset
-          pointed to by offset 12, as UTF-16-LE null-terminated.
+        - Offset 4: Signature 'SCCA' (4 bytes)
+        - Offset 8: Header size (4 bytes)
+        - Offset 68: Run count (4 bytes) — after filename section in header
+        - Offset 68+ varies by build; run_count commonly at offset 68 or 140
+
+        Note: v30 prefetch format has a variable header layout. The run_count
+        position varies by Windows build. We read from offset 68 as a common
+        location and fall back to the filename from the path stem.
         """
         try:
-            run_count = struct.unpack_from("<I", data, 8)[0]
-            # Read executable name from dynamic offset
-            name_offset = struct.unpack_from("<I", data, 12)[0]
-            if name_offset < len(data) - 2:
-                # Read up to 64 bytes of UTF-16-LE from the name offset
-                name_end = min(name_offset + 128, len(data))
-                raw_name = data[name_offset:name_end]
-                executable = raw_name.decode("utf-16-le", errors="replace").rstrip("\x00")
-            else:
-                executable = path.stem
+            # Verify SCCA signature at offset 4
+            sig = data[4:8]
+            if sig != b"SCCA":
+                # Not a valid v30 prefetch — fallback
+                return {"executable": path.stem, "run_count": 0, "version": 30, "path": str(path)}
+
+            # Run count — commonly at offset 68 in v30 format
+            run_count = struct.unpack_from("<I", data, 68)[0] if len(data) >= 72 else 0
+            # Executable name is typically at offset 112 as UTF-16-LE in v30
+            executable = path.stem  # Default to filename stem
+            if len(data) >= 240:  # Enough data for the name section
+                try:
+                    name_offset = 112  # Common v30 executable name offset
+                    name_end = min(name_offset + 128, len(data))
+                    raw_name = data[name_offset:name_end]
+                    decoded = raw_name.decode("utf-16-le", errors="replace").rstrip("\x00")
+                    if decoded and decoded.isprintable():
+                        executable = decoded
+                except (UnicodeDecodeError, struct.error):
+                    pass
             return {
                 "executable": executable,
                 "run_count": run_count,

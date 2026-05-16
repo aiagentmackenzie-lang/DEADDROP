@@ -10,8 +10,27 @@ from deaddrop.core.case import CaseManager
 
 # IOC pattern matchers
 IOC_PATTERNS = {
-    "ipv4": re.compile(r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'),
-    "ipv6": re.compile(r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b'),
+    "ipv4": re.compile(
+        r'(?<![\w./])'  # no preceding word char, dot, or slash (avoids version numbers)
+        r'(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}'
+        r'(?:25[0-5]|2[0-4]\d|[01]?\d\d?)'
+        r'(?![\w.])'   # no following word char or dot
+    ),
+    "ipv6": re.compile(
+        r'(?<![0-9a-fA-F:])(?:'
+        r'(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}'  # full 8-group
+        r'|(?:[0-9a-fA-F]{1,4}:){1,7}:'               # trailing ::
+        r'|:(?:[0-9a-fA-F]{1,4}:){1,7}'               # leading ::
+        r'|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}'  # :: with 1 group
+        r'|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}'  # :: with 2 groups
+        r'|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}'  # :: with 3 groups
+        r'|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}'  # :: with 4 groups
+        r'|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}'  # :: with 5 groups
+        r'|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}'          # :: with 6 groups
+        r'|:(?::[0-9a-fA-F]{1,4}){1,7}'              # :: only
+        r'|::'                                        # :: (unspecified)
+        r')(?![0-9a-fA-F:])'
+    ),
     "domain": re.compile(r'\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b'),
     "email": re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
     "url": re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE),
@@ -74,7 +93,7 @@ class IOCMatcher:
         for ioc_type, values in iocs.items():
             for value in values[:1000]:  # Cap per type
                 severity = self._assess_severity(ioc_type, value)
-                result_id = str(uuid.uuid4())[:8]
+                result_id = str(uuid.uuid4())[:12]
                 self.mgr.add_hunt_result(
                     case_id=case_id,
                     result_id=result_id,
@@ -140,10 +159,28 @@ class IOCMatcher:
             return "medium"
 
         if ioc_type == "ipv4":
-            # Known C2 ranges (simplified)
-            private_ranges = ("10.", "172.16.", "192.168.")
-            if value.startswith(private_ranges):
-                return "info"
+            # Private / reserved ranges (RFC 1918, loopback, link-local)
+            parts = value.split(".")
+            if len(parts) == 4:
+                try:
+                    a, b, c, _d = (int(p) for p in parts)
+                except ValueError:
+                    return "medium"
+                # 10.0.0.0/8
+                if a == 10:
+                    return "info"
+                # 172.16.0.0/12 (172.16.0.0 – 172.31.255.255)
+                if a == 172 and 16 <= b <= 31:
+                    return "info"
+                # 192.168.0.0/16
+                if a == 192 and b == 168:
+                    return "info"
+                # 127.0.0.0/8 (loopback)
+                if a == 127:
+                    return "info"
+                # 169.254.0.0/16 (link-local)
+                if a == 169 and b == 254:
+                    return "info"
             return "medium"
 
         return "medium"

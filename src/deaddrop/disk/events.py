@@ -69,7 +69,7 @@ class EventLogAnalyzer:
                     description=artifact["description"],
                     severity=artifact["severity"],
                     data=str(artifact),
-                    artifact_id=str(uuid.uuid4())[:8],
+                    artifact_id=str(uuid.uuid4())[:12],
                 )
                 if artifact.get("timestamp"):
                     self.mgr.add_timeline_entry(
@@ -97,7 +97,12 @@ class EventLogAnalyzer:
 
         SECURITY_EVENTS is used as a lookup for classifying found events,
         NOT as a source of fake artifacts. Returns empty list unless
-        actual EVTX files are parsed.
+        actual EVTX files are parsed via parse_evtx().
+
+        Known limitation: analyze() currently returns no artifacts because
+        _extract_event_artifacts() requires integration with a full EVTX
+        parser library (e.g., python-evtx). Use parse_evtx() directly for
+        individual EVTX files.
         """
         # No fake artifacts — only produce results from actual parsing
         return []

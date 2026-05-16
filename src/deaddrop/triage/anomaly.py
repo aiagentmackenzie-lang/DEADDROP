@@ -55,10 +55,11 @@ class AnomalyDetector:
         if not hour_counts:
             return anomalies
 
-        # Calculate mean and std
+        # Calculate mean and sample standard deviation (Bessel's correction: N-1)
         counts = list(hour_counts.values())
         mean = sum(counts) / len(counts)
-        variance = sum((c - mean) ** 2 for c in counts) / len(counts) if counts else 0
+        n = len(counts)
+        variance = sum((c - mean) ** 2 for c in counts) / (n - 1) if n > 1 else 0
         std = math.sqrt(variance) if variance > 0 else 0
 
         # Flag hours with > 2 standard deviations above mean
