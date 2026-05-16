@@ -44,3 +44,7 @@ coverage.xml
 
 # MyPy
 .mypy_cache/
+
+# Audit artifacts (internal, not for repo)
+BUG_CATALOG.md
+README_AUDIT.md
