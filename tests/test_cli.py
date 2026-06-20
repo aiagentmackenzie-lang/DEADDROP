@@ -16,7 +16,7 @@ class TestCLIVersion:
         """Show version via CLI."""
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "1.0.0" in result.output
+        assert "1.2.0" in result.output
 
 
 class TestCLICase:

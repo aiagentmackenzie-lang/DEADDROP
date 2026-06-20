@@ -62,7 +62,7 @@ class TestHealthAndBasics:
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "ok"
-        assert body["version"] == "1.1.0"
+        assert body["version"] == "1.2.0"
         assert body["auth_enabled"] is False  # disabled in test fixture
 
 

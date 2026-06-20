@@ -17,7 +17,7 @@ def get_case_manager(config: Config | None = None) -> CaseManager:
 
 
 @click.group()
-@click.version_option(version="1.0.0", prog_name="deaddrop")
+@click.version_option(version="1.2.0", prog_name="deaddrop")
 def cli():
     """DEADDROP — Digital Forensics Toolkit with AI-assisted triage."""
 

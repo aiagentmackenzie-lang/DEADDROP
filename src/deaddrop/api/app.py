@@ -102,7 +102,7 @@ def create_app() -> FastAPI:
     """Build the FastAPI app with auth, CORS, routes, WebSocket, and static."""
     app = FastAPI(
         title="DEADDROP API",
-        version="1.1.0",
+        version="1.2.0",
         description="Digital Forensics Toolkit — in-process REST + WebSocket API",
         lifespan=_lifespan,
     )
@@ -128,7 +128,7 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {
             "status": "ok",
-            "version": "1.1.0",
+            "version": "1.2.0",
             "auth_enabled": is_auth_enabled(),
         }
 
