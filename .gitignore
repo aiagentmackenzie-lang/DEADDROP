@@ -52,3 +52,6 @@ coverage.xml
 # Audit artifacts (internal, not for repo)
 BUG_CATALOG.md
 README_AUDIT.md
+
+# Internal planning roadmap (not shipped — lives locally with the project)
+docs/production-roadmap.md
