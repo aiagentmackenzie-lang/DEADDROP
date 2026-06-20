@@ -72,8 +72,8 @@ CREATE TABLE IF NOT EXISTS artifacts (
     description TEXT DEFAULT '',
     severity TEXT DEFAULT 'info',  -- info, low, medium, high, critical
     data TEXT DEFAULT '{}',  -- JSON blob
-    FOREIGN KEY (case_id) REFERENCES cases(id),
-    FOREIGN KEY (evidence_id) REFERENCES evidence(id)
+    FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+    FOREIGN KEY (evidence_id) REFERENCES evidence(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS timeline (
@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS timeline (
     description TEXT DEFAULT '',
     severity TEXT DEFAULT 'info',
     artifact_id TEXT,
-    FOREIGN KEY (case_id) REFERENCES cases(id)
+    FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+    FOREIGN KEY (evidence_id) REFERENCES evidence(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS hunt_results (
@@ -98,7 +99,8 @@ CREATE TABLE IF NOT EXISTS hunt_results (
     match_data TEXT DEFAULT '',
     severity TEXT DEFAULT 'medium',
     detected_at TEXT NOT NULL,
-    FOREIGN KEY (case_id) REFERENCES cases(id)
+    FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+    FOREIGN KEY (evidence_id) REFERENCES evidence(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_evidence_case ON evidence(case_id);
@@ -210,13 +212,26 @@ class CaseManager:
         return cur.rowcount > 0
 
     def delete_case(self, case_id: str) -> bool:
-        self.conn.execute("DELETE FROM artifacts WHERE case_id = ?", (case_id,))
-        self.conn.execute("DELETE FROM timeline WHERE case_id = ?", (case_id,))
-        self.conn.execute("DELETE FROM hunt_results WHERE case_id = ?", (case_id,))
-        self.conn.execute("DELETE FROM evidence WHERE case_id = ?", (case_id,))
-        cur = self.conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
-        self.conn.commit()
-        return cur.rowcount > 0
+        """Delete a case and all its children transactionally.
+
+        Children are deleted in dependency order (artifacts/timeline/hunt_results
+        reference evidence, so they go first; then evidence; then the case)
+        inside a single transaction so a crash mid-delete can't orphan rows.
+        The schema FKs (ON DELETE CASCADE / SET NULL) additionally enforce
+        integrity for any ad-hoc DELETE that bypasses this method.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            self.conn.execute("DELETE FROM artifacts WHERE case_id = ?", (case_id,))
+            self.conn.execute("DELETE FROM timeline WHERE case_id = ?", (case_id,))
+            self.conn.execute("DELETE FROM hunt_results WHERE case_id = ?", (case_id,))
+            self.conn.execute("DELETE FROM evidence WHERE case_id = ?", (case_id,))
+            cur = self.conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
+            self.conn.commit()
+            return cur.rowcount > 0
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def add_evidence(self, case_id: str, evidence_id: str, etype: str, path: str,
                      filename: str, size_bytes: int, sha256: str, md5: str, fmt: str) -> bool:

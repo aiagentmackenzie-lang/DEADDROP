@@ -25,6 +25,28 @@ def compute_hashes(file_path: Path, chunk_size: int = 8192) -> tuple[str, str]:
     return sha256.hexdigest(), md5.hexdigest()
 
 
+def compute_dir_manifest_hash(dir_path: Path) -> tuple[str, str, int]:
+    """Compute a chain-of-custody hash for a directory of extracted artifacts.
+
+    Hashes a sorted manifest of (relative_path, size) for every file under the
+    directory. This gives a verifiable integrity hash for directory evidence
+    (e.g. a folder of carved .pf/.evtx/.hive files) without reading every byte
+    into one blob. Returns (sha256, md5, total_size).
+    """
+    sha256 = hashlib.sha256()
+    md5 = hashlib.md5()
+    total = 0
+    files = sorted(p for p in dir_path.rglob("*") if p.is_file())
+    for p in files:
+        rel = p.relative_to(dir_path).as_posix()
+        size = p.stat().st_size
+        total += size
+        line = f"{rel}\t{size}\n".encode()
+        sha256.update(line)
+        md5.update(line)
+    return sha256.hexdigest(), md5.hexdigest(), total
+
+
 def detect_format(file_path: Path) -> str:
     """Detect evidence format from extension and magic bytes."""
     ext = file_path.suffix.lower()
@@ -49,7 +71,7 @@ def detect_format(file_path: Path) -> str:
         if header[:3] == b"\x7fELF":
             return "ELF64"
         if header[:4] == b"MDMP":
-            return "Windows Minidump"
+            return "Windows Crash Dump"  # Minidump variant; unified with .dmp ext (H-6)
         if header[:4] == b"PAGE":
             return "Windows Page File"
     except (OSError, PermissionError):
@@ -74,9 +96,15 @@ class EvidenceManager:
             raise FileNotFoundError(f"Disk image not found: {image_path}")
 
         evidence_id = str(uuid.uuid4())[:12]
-        fmt = detect_format(path)
-        sha256, md5 = compute_hashes(path)
-        size = path.stat().st_size
+        # Directories of extracted artifacts (carved .pf/.evtx/.hive files) are
+        # valid disk evidence — hash a manifest instead of the bytes.
+        if path.is_dir():
+            fmt = "DIR"
+            sha256, md5, size = compute_dir_manifest_hash(path)
+        else:
+            fmt = detect_format(path)
+            sha256, md5 = compute_hashes(path)
+            size = path.stat().st_size
 
         self.case_manager.add_evidence(
             case_id=case_id,
@@ -150,7 +178,10 @@ class EvidenceManager:
         if not path.exists():
             return {"verified": False, "reason": "File no longer exists at recorded path"}
 
-        current_sha256, current_md5 = compute_hashes(path)
+        if path.is_dir():
+            current_sha256, current_md5, _ = compute_dir_manifest_hash(path)
+        else:
+            current_sha256, current_md5 = compute_hashes(path)
         sha256_match = current_sha256 == evidence["sha256"]
         md5_match = current_md5 == evidence["md5"]
 

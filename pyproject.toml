@@ -46,6 +46,11 @@ deaddrop = "deaddrop.cli:cli"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# Ship bundled YARA rules and hunt packs so they resolve under any install
+# mode (editable, wheel, Docker) via importlib.resources / module-relative paths.
+deaddrop = ["rules/**/*.yar", "rules/*.yar", "hunt/packs/*.yaml"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -76,7 +81,7 @@ exclude = ["src/deaddrop/plugins/builtin/"]
 
 [[tool.mypy.overrides]]
 # Forensics libs without stubs — don't fail the gate on their type hints.
-module = ["yara", "pytsk3", "volatility3.*", "weasyprint.*", "evtx.*", "Registry.*", "libscca.*"]
+module = ["yara", "pytsk3", "volatility3.*", "weasyprint.*", "Evtx.*", "Evtx.Evtx", "Registry.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -3,6 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from deaddrop.core.case import CaseManager
 
@@ -14,7 +15,7 @@ rule EICAR_Test {
         description = "EICAR test file detection"
         severity = "info"
     strings:
-        $eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+        $eicar = "X5O!P%@AP[4\\\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
     condition:
         $eicar
 }''',
@@ -172,46 +173,116 @@ class YARAScanner:
             ev_path = Path(ev["path"])
             if not ev_path.exists():
                 continue
-
-            # For disk images, scan in chunks (can't YARA-scan binary images efficiently)
-            # For memory dumps and other files, scan directly
             try:
-                if ev["type"] == "memory" or ev_path.stat().st_size < 500 * 1024 * 1024:
-                    for _rule_name, compiled in compiled_rules.items():
-                        matches = compiled.match(str(ev_path))
-                        for match in matches:
-                            severity = "medium"
-                            # Try to extract severity from rule metadata
-                            if match.meta and "severity" in match.meta:
-                                severity = match.meta["severity"]
-
-                            result_id = str(uuid.uuid4())[:12]
-                            self.mgr.add_hunt_result(
-                                case_id=case_id,
-                                result_id=result_id,
-                                rule_name=match.rule,
-                                rule_type="yara",
-                                severity=severity,
-                                evidence_id=ev["id"],
-                                match_data=str(match.strings[:5]) if match.strings else "",
-                            )
-                            total_hits += 1
-
-                            # Also add as artifact
-                            self.mgr.add_artifact(
-                                case_id=case_id,
-                                evidence_id=ev["id"],
-                                source="hunt",
-                                category="yara_match",
-                                timestamp=datetime.now(UTC).isoformat(),
-                                description=f"YARA match: {match.rule} in {ev['filename']}",
-                                severity=severity,
-                                data=str({"rule": match.rule, "strings": [str(s) for s in match.strings[:5]]}),
-                            )
+                total_hits += self._scan_evidence(
+                    case_id, ev, ev_path, compiled_rules
+                )
             except (OSError, PermissionError):
                 continue
 
         return {"hits": total_hits}
+
+    # Files larger than this are scanned in CHUNK-size windows written to a
+    # temp file (yara.match mmaps the path; chunking bounds memory + lets the
+    # scan make progress on multi-GB disk images instead of silently skipping
+    # them — SB-7). yara-python has no per-call timeout, so chunking also bounds
+    # the worst-case time per evidence item.
+    MAX_DIRECT_SCAN_SIZE = 2 * 1024 * 1024 * 1024  # 2 GiB
+    SCAN_CHUNK = 512 * 1024 * 1024  # 512 MiB windows, 16 MiB overlap
+    SCAN_OVERLAP = 16 * 1024 * 1024
+
+    def _scan_evidence(
+        self, case_id: str, ev: dict, ev_path: Path,
+        compiled_rules: dict[str, Any],
+    ) -> int:
+        """Scan one evidence file, chunking if it exceeds MAX_DIRECT_SCAN_SIZE."""
+        size = ev_path.stat().st_size
+        if size <= self.MAX_DIRECT_SCAN_SIZE:
+            return self._scan_file(case_id, ev, str(ev_path), compiled_rules, 0)
+
+        # Chunked scan for large images: write overlapping windows to a temp
+        # file and scan each. The overlap catches signatures straddling a
+        # window boundary. Hits are deduplicated by (rule, absolute_offset).
+        import tempfile
+        seen: set[tuple[str, int]] = set()
+        hits = 0
+        with tempfile.TemporaryDirectory(prefix="deaddrop_yara_") as tmp:
+            tmpfile = Path(tmp) / "chunk.bin"
+            offset = 0
+            with open(ev_path, "rb") as src:
+                while offset < size:
+                    src.seek(offset)
+                    window = min(self.SCAN_CHUNK, size - offset)
+                    data = src.read(window)
+                    if not data:
+                        break
+                    tmpfile.write_bytes(data)
+                    chunk_hits = self._scan_file(
+                        case_id, ev, str(tmpfile), compiled_rules, offset,
+                        seen=seen,
+                    )
+                    hits += chunk_hits
+                    if window < self.SCAN_CHUNK:
+                        break  # last partial window
+                    offset += self.SCAN_CHUNK - self.SCAN_OVERLAP
+        return hits
+
+    def _scan_file(
+        self, case_id: str, ev: dict, file_path: str,
+        compiled_rules: dict[str, Any], base_offset: int,
+        seen: set[tuple[str, int]] | None = None,
+    ) -> int:
+        """Scan one file with every compiled rule; record + dedupe hits.
+
+        `base_offset` is added to each match's offset to map chunk hits back to
+        their absolute position in the original evidence file. `seen` dedupes
+        across overlapping chunk windows.
+        """
+        hits = 0
+        for _rule_name, compiled in compiled_rules.items():
+            matches = compiled.match(file_path)
+            for match in matches:
+                severity = "medium"
+                if match.meta and "severity" in match.meta:
+                    severity = match.meta["severity"]
+                # Absolute offset of the first matched string (if available).
+                abs_off = base_offset
+                try:
+                    if match.strings:
+                        # yara-python 4.x: match.strings is list of (off, ident, data)
+                        first = match.strings[0]
+                        abs_off = base_offset + (first[0] if isinstance(first, tuple) else 0)
+                except (IndexError, TypeError):
+                    pass
+                if seen is not None:
+                    key = (match.rule, abs_off)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+
+                result_id = str(uuid.uuid4())[:12]
+                self.mgr.add_hunt_result(
+                    case_id=case_id,
+                    result_id=result_id,
+                    rule_name=match.rule,
+                    rule_type="yara",
+                    severity=severity,
+                    evidence_id=ev["id"],
+                    match_data=str(match.strings[:5]) if match.strings else "",
+                )
+                hits += 1
+                self.mgr.add_artifact(
+                    case_id=case_id,
+                    evidence_id=ev["id"],
+                    source="hunt",
+                    category="yara_match",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    description=f"YARA match: {match.rule} in {ev['filename']} @0x{abs_off:x}",
+                    severity=severity,
+                    data=str({"rule": match.rule, "offset": abs_off,
+                              "strings": [str(s) for s in match.strings[:5]]}),
+                )
+        return hits
 
     def _load_rules(self, rules_path: str) -> dict[str, str]:
         """Load YARA rules from a file or directory."""

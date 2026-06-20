@@ -365,43 +365,98 @@ class TestM07PDFWarning:
         assert Path(path).read_bytes()[:5] == b"%PDF-"
 
 
-# ── H-06: Prefetch v30 SCCA signature check ────────────────────
+# ── H-06/SB-8: Prefetch SCCA parser (spec-conformance, not tautology) ──
+#
+# The prior tests packed run_count at offset 68 and the parser read offset 68 —
+# both wrong, test passed tautologically. These tests build fixtures with the
+# LITERAL spec offsets (0x10 for name, 0x90 for run_count) so a parser that
+# drifts from the spec fails. The parser's own constants are NOT imported here.
 
 class TestH06PrefetchV30Signature:
-    def test_v30_valid_scca(self, tmp_path):
-        """Valid v30 prefetch with SCCA signature parses correctly."""
+    def test_v30_valid_scca_reads_spec_offsets(self, tmp_path):
+        """v30 prefetch: name at 0x10, run_count at 0x90 — spec-conformance."""
         from deaddrop.disk.prefetch import PrefetchAnalyzer
         case_mgr = CaseManager(tmp_path / "test.db")
         analyzer = PrefetchAnalyzer(case_mgr)
 
         pf_file = tmp_path / "test.pf"
-        data = bytearray(1024)
-        struct.pack_into("<I", data, 0, 30)  # version
-        data[4:8] = b"SCCA"  # signature
-        struct.pack_into("<I", data, 68, 5)  # run_count
-        pf_file.write_bytes(bytes(data))
+        data = bytearray(256)
+        struct.pack_into("<I", data, 0x00, 30)        # version @ 0x00 (literal)
+        data[0x04:0x08] = b"SCCA"                      # signature @ 0x04 (literal)
+        # Executable name @ 0x10 (literal): 60 wchars UTF-16-LE, NUL-padded
+        name = "notepad.exe\x00".encode("utf-16-le")
+        data[0x10:0x10 + len(name)] = name
+        struct.pack_into("<I", data, 0x90, 7)         # run_count @ 0x90 (literal)
 
+        pf_file.write_bytes(bytes(data))
         result = analyzer.parse_prefetch_file(pf_file)
+
         assert result is not None
         assert result["version"] == 30
-        assert result["run_count"] == 5
+        assert result["run_count"] == 7
+        assert result["executable"] == "notepad.exe"
         case_mgr.close()
 
-    def test_v30_invalid_signature_fallback(self, tmp_path):
-        """v30 prefetch without SCCA signature falls back to path stem."""
+    def test_v30_invalid_signature_returns_none(self, tmp_path):
+        """v30 with a bad SCCA signature is rejected (fail-closed), not faked."""
         from deaddrop.disk.prefetch import PrefetchAnalyzer
         case_mgr = CaseManager(tmp_path / "test.db")
         analyzer = PrefetchAnalyzer(case_mgr)
 
         pf_file = tmp_path / "mymalware.pf"
-        data = bytearray(1024)
-        struct.pack_into("<I", data, 0, 30)  # version
-        data[4:8] = b"XXXX"  # wrong signature
-        pf_file.write_bytes(bytes(data))
+        data = bytearray(256)
+        struct.pack_into("<I", data, 0x00, 30)
+        data[0x04:0x08] = b"XXXX"  # wrong signature
 
+        pf_file.write_bytes(bytes(data))
+        result = analyzer.parse_prefetch_file(pf_file)
+        # Fail-closed: an invalid SCCA signature is NOT a prefetch file.
+        assert result is None
+        case_mgr.close()
+
+    def test_v23_win7_reads_spec_offsets(self, tmp_path):
+        """v23 (Win7) uses the same header layout — name@0x10, run_count@0x90."""
+        from deaddrop.disk.prefetch import PrefetchAnalyzer
+        case_mgr = CaseManager(tmp_path / "test.db")
+        analyzer = PrefetchAnalyzer(case_mgr)
+
+        pf_file = tmp_path / "win7.pf"
+        data = bytearray(256)
+        struct.pack_into("<I", data, 0x00, 23)
+        data[0x04:0x08] = b"SCCA"
+        name = "cmd.exe\x00".encode("utf-16-le")
+        data[0x10:0x10 + len(name)] = name
+        struct.pack_into("<I", data, 0x90, 42)
+
+        pf_file.write_bytes(bytes(data))
         result = analyzer.parse_prefetch_file(pf_file)
         assert result is not None
-        assert result["executable"] == "mymalware"  # fallback to path stem
+        assert result["version"] == 23
+        assert result["executable"] == "cmd.exe"
+        assert result["run_count"] == 42
+        case_mgr.close()
+
+    def test_unsupported_version_returns_none(self, tmp_path):
+        """An unknown SCCA version is rejected, not guessed at."""
+        from deaddrop.disk.prefetch import PrefetchAnalyzer
+        case_mgr = CaseManager(tmp_path / "test.db")
+        analyzer = PrefetchAnalyzer(case_mgr)
+        pf_file = tmp_path / "weird.pf"
+        data = bytearray(256)
+        struct.pack_into("<I", data, 0x00, 99)  # unsupported version
+        data[0x04:0x08] = b"SCCA"
+        pf_file.write_bytes(bytes(data))
+        assert analyzer.parse_prefetch_file(pf_file) is None
+        case_mgr.close()
+
+    def test_too_small_file_returns_none(self, tmp_path):
+        """A file too small to contain the header is rejected."""
+        from deaddrop.disk.prefetch import PrefetchAnalyzer
+        case_mgr = CaseManager(tmp_path / "test.db")
+        analyzer = PrefetchAnalyzer(case_mgr)
+        pf_file = tmp_path / "tiny.pf"
+        pf_file.write_bytes(b"SCCA" + b"\x00" * 10)  # 14 bytes, < 0x94
+        assert analyzer.parse_prefetch_file(pf_file) is None
         case_mgr.close()
 
 

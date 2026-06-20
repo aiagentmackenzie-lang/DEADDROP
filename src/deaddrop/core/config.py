@@ -7,6 +7,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+try:
+    from importlib.resources import files as _resource_files
+except ImportError:  # Python <3.9 fallback (we require 3.12, so this won't fire)
+    _resource_files = None  # type: ignore[assignment]
+
 
 def _deaddrop_home() -> Path:
     """Resolve the DEADDROP home directory.
@@ -19,8 +24,23 @@ def _deaddrop_home() -> Path:
     return Path.home()
 
 
+def _default_rules_dir() -> Path:
+    """Resolve the bundled YARA rules directory.
+
+    Ships as package data under ``deaddrop/rules`` so it resolves under any
+    install mode (editable, wheel, Docker). Falls back to a user dir under
+    DEADDROP_HOME if the resource can't be located.
+    """
+    if _resource_files is not None:
+        try:
+            return Path(str(_resource_files("deaddrop") / "rules"))
+        except (ModuleNotFoundError, FileNotFoundError):
+            pass
+    return _deaddrop_home() / ".deaddrop" / "rules"
+
+
 DEFAULT_DB_PATH = _deaddrop_home() / ".deaddrop" / "cases.db"
-DEFAULT_RULES_DIR = Path(__file__).parent.parent.parent.parent / "rules"
+DEFAULT_RULES_DIR = _default_rules_dir()
 DEFAULT_PLUGINS_DIR = _deaddrop_home() / ".deaddrop" / "plugins"
 
 
@@ -40,7 +60,7 @@ class Config:
             data = json.loads(path.read_text())
             return cls(
                 db_path=Path(data.get("db_path", str(DEFAULT_DB_PATH))),
-                rules_dir=Path(data.get("rules_dir", str(DEFAULT_RULES_DIR))),
+                rules_dir=Path(data.get("rules_dir", str(_default_rules_dir()))),
                 plugins_dir=Path(data.get("plugins_dir", str(DEFAULT_PLUGINS_DIR))),
                 ollama_url=data.get("ollama_url", "http://localhost:11434"),
                 ollama_model=data.get("ollama_model", "llama3"),
@@ -51,7 +71,7 @@ class Config:
         # isolation via monkeypatch.setenv actually takes effect.
         return cls(
             db_path=_deaddrop_home() / ".deaddrop" / "cases.db",
-            rules_dir=DEFAULT_RULES_DIR,
+            rules_dir=_default_rules_dir(),
             plugins_dir=_deaddrop_home() / ".deaddrop" / "plugins",
         )
 
