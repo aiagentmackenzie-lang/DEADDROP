@@ -43,7 +43,7 @@ class TimelineEngine:
         entries = self.mgr.get_timeline(case_id)
 
         # Count by source
-        sources = {}
+        sources: dict[str, int] = {}
         for entry in entries:
             src = entry.get("source", "unknown")
             sources[src] = sources.get(src, 0) + 1
@@ -68,8 +68,8 @@ class TimelineEngine:
         """Get timeline statistics."""
         entries = self.mgr.get_timeline(case_id)
 
-        severity_counts = {}
-        source_counts = {}
+        severity_counts: dict[str, int] = {}
+        source_counts: dict[str, int] = {}
         for entry in entries:
             sev = entry.get("severity", "info")
             src = entry.get("source", "unknown")

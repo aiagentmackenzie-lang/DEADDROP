@@ -1,5 +1,7 @@
 """Plugin hook definitions — pipeline stages for plugin integration."""
 
+from typing import ClassVar
+
 
 class PipelineHooks:
     """Hook points in the DEADDROP processing pipeline."""
@@ -14,7 +16,7 @@ class PipelineHooks:
     POST_REPORT = "post_report"
     CUSTOM = "custom"
 
-    ALL_HOOKS = [
+    ALL_HOOKS: ClassVar[list[str]] = [
         PRE_INGEST, POST_INGEST,
         PRE_ANALYZE, POST_ANALYZE,
         PRE_HUNT, POST_HUNT,
@@ -25,7 +27,7 @@ class PipelineHooks:
 
 def run_hooks(hook_name: str, plugins: dict, case_id: str, **context) -> dict:
     """Run all plugins registered for a specific hook point."""
-    results = {}
+    results: dict[str, dict] = {}
     for name, plugin in plugins.items():
         if hook_name in plugin.hooks:
             try:

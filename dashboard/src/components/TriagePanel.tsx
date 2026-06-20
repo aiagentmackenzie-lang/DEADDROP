@@ -10,7 +10,7 @@ export default function TriagePanel({ caseId }: { caseId: string }) {
   async function runTriage() {
     setRunning(true);
     try {
-      const res = await fetch(`${API}/artifacts/triage`, {
+      const res = await fetch(`${API}/analyze/triage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ case_id: caseId }),
@@ -27,7 +27,7 @@ export default function TriagePanel({ caseId }: { caseId: string }) {
     setRunning(true);
     try {
       // Use triage summary endpoint
-      const res = await fetch(`${API}/artifacts/triage`, {
+      const res = await fetch(`${API}/analyze/triage/summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ case_id: caseId }),

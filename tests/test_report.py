@@ -1,7 +1,8 @@
 """Tests for ReportGenerator — HTML/PDF forensic reports."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from deaddrop.core.case import CaseManager
 from deaddrop.report.generator import ReportGenerator
@@ -16,11 +17,19 @@ def case_mgr(tmp_path):
 
 
 @pytest.fixture
-def populated_case(case_mgr):
-    """Create a case with evidence, artifacts, and timeline entries."""
+def populated_case(case_mgr, tmp_path):
+    """Create a case with evidence (real files so the integrity gate passes),
+    artifacts, and timeline entries."""
     c = case_mgr.create_case("Report Test", analyst="Raphael", notes="Testing reports")
-    case_mgr.add_evidence(c.id, "ev1", "disk", "/tmp/img.raw", "img.raw", 1048576, "a" * 64, "b" * 32, "RAW")
-    case_mgr.add_evidence(c.id, "ev2", "memory", "/tmp/mem.raw", "mem.raw", 2097152, "c" * 64, "d" * 32, "RAW")
+    img = tmp_path / "img.raw"
+    img.write_bytes(b"\x00" * 1024)
+    mem = tmp_path / "mem.raw"
+    mem.write_bytes(b"\x00" * 2048)
+    from deaddrop.core.evidence import compute_hashes
+    ih = compute_hashes(img)
+    mh = compute_hashes(mem)
+    case_mgr.add_evidence(c.id, "ev1", "disk", str(img), "img.raw", 1024, ih[0], ih[1], "RAW")
+    case_mgr.add_evidence(c.id, "ev2", "memory", str(mem), "mem.raw", 2048, mh[0], mh[1], "RAW")
     case_mgr.add_artifact(c.id, "ev1", "filesystem", "file", "2026-01-15T10:00:00", "Suspicious file found", "high")
     case_mgr.add_artifact(c.id, "ev2", "memory", "process", "2026-01-15T10:05:00", "Mimikatz detected", "critical")
     case_mgr.add_timeline_entry(c.id, "events", "2026-01-15T10:00:00", "Logon event", "info")
@@ -45,17 +54,35 @@ class TestReportGenerator:
         assert "Chain of Custody" in content
 
     def test_generate_pdf_fallback(self, case_mgr, populated_case, tmp_path):
-        """PDF generation falls back to HTML when weasyprint unavailable."""
+        """PDF generation: real PDF when WeasyPrint available, HTML fallback otherwise.
+
+        WeasyPrint 68.x is installed in this venv, so the generator produces a
+        real binary PDF (starts with `%PDF-`). When WeasyPrint is absent, the
+        generator falls back to HTML with a warning. This test verifies BOTH
+        paths by monkeypatching availability.
+        """
         gen = ReportGenerator(case_mgr)
         output = str(tmp_path / "report.pdf")
-        path = gen.generate(populated_case.id, "pdf", output)
-        # When weasyprint is unavailable, it falls back to HTML
-        # The returned path will end with .html (possibly with a note)
-        html_path = path.split(" ")[0]  # Strip any appended message
-        assert Path(html_path).exists()
-        # Verify it contains actual report content
-        content = Path(html_path).read_text()
-        assert "DEADDROP" in content or "Forensic" in content
+
+        try:
+            import weasyprint  # noqa: F401
+            weasyprint_available = True
+        except ImportError:
+            weasyprint_available = False
+
+        if weasyprint_available:
+            # Real PDF path
+            path = gen.generate(populated_case.id, "pdf", output)
+            assert path.endswith(".pdf")
+            data = Path(path).read_bytes()
+            assert data[:5] == b"%PDF-", "expected a real PDF magic header"
+        else:
+            # Fallback HTML path
+            path = gen.generate(populated_case.id, "pdf", output)
+            html_path = path.split(" ")[0]
+            assert html_path.endswith(".html")
+            content = Path(html_path).read_text()
+            assert "DEADDROP" in content or "Forensic" in content
 
     def test_generate_report_auto_path(self, case_mgr, populated_case):
         """Report generates to auto-created directory when no output path given."""

@@ -2,7 +2,6 @@
 
 from deaddrop.core.case import CaseManager
 
-
 SUSPICIOUS_PROCESSES = {
     "mimikatz.exe": "critical",
     "procdump.exe": "high",

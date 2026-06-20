@@ -1,12 +1,11 @@
 """IOC matcher — match indicators of compromise against evidence."""
 
-import uuid
-import re
 import json
+import re
+import uuid
 from pathlib import Path
 
 from deaddrop.core.case import CaseManager
-
 
 # IOC pattern matchers
 IOC_PATTERNS = {
@@ -63,7 +62,7 @@ class IOCMatcher:
 
     def match_patterns(self, case_id: str) -> dict:
         """Auto-detect IOCs in evidence using regex patterns."""
-        iocs = {}
+        iocs: dict[str, list] = {}
         evidence_list = self.mgr.list_evidence(case_id)
 
         for ev in evidence_list:
@@ -108,7 +107,7 @@ class IOCMatcher:
 
     def _parse_iocs(self, data: dict | list) -> dict:
         """Parse IOC data from various formats."""
-        iocs = {}
+        iocs: dict[str, list] = {}
 
         if isinstance(data, list):
             for item in data:
@@ -163,13 +162,13 @@ class IOCMatcher:
             parts = value.split(".")
             if len(parts) == 4:
                 try:
-                    a, b, c, _d = (int(p) for p in parts)
+                    a, b, _c, _d = (int(p) for p in parts)
                 except ValueError:
                     return "medium"
                 # 10.0.0.0/8
                 if a == 10:
                     return "info"
-                # 172.16.0.0/12 (172.16.0.0 – 172.31.255.255)
+                # 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
                 if a == 172 and 16 <= b <= 31:
                     return "info"
                 # 192.168.0.0/16

@@ -1,7 +1,8 @@
 """Tests for hunt module."""
 
-import pytest
 import json
+
+import pytest
 
 from deaddrop.core.case import CaseManager
 from deaddrop.hunt.ioc_matcher import IOCMatcher

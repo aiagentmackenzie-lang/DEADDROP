@@ -65,7 +65,7 @@ export default function CaseOverview({ caseId }: { caseId: string }) {
         <h2 className="text-lg font-bold text-white mb-4">⚡ Quick Actions</h2>
         <div className="flex gap-3 flex-wrap">
           <ActionButton label="Analyze Filesystem" onClick={() => runAction('analyze/filesystem')} />
-          <ActionButton label="Run Triage" onClick={() => runAction('triage')} />
+          <ActionButton label="Run Triage" onClick={() => runAction('analyze/triage')} />
           <ActionButton label="YARA Scan" onClick={() => runAction('hunt/yara')} />
           <ActionButton label="Generate Report" onClick={() => runAction('reports/generate')} />
         </div>

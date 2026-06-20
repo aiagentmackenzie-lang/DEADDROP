@@ -1,16 +1,18 @@
 """Tests for bug fixes — validates all 20 bugs from BUG_CATALOG.md are fixed."""
 
+import sqlite3
 import struct
-import pytest
 from pathlib import Path
 
+import pytest
+
 from deaddrop.core.case import CaseManager
-from deaddrop.hunt.ioc_matcher import IOCMatcher, IOC_PATTERNS
-from deaddrop.disk.carving import FileCarver, SIGNATURES
+from deaddrop.disk.carving import SIGNATURES, FileCarver
+from deaddrop.hunt.ioc_matcher import IOC_PATTERNS, IOCMatcher
 from deaddrop.report.generator import ReportGenerator
-from deaddrop.triage.scorer import TriageScorer
-from deaddrop.triage.anomaly import AnomalyDetector
 from deaddrop.timeline.export import TimelineExporter
+from deaddrop.triage.anomaly import AnomalyDetector
+from deaddrop.triage.scorer import TriageScorer
 
 
 @pytest.fixture
@@ -32,7 +34,7 @@ class TestC01XSSPrevention:
 
         gen = ReportGenerator(case_mgr)
         output = str(tmp_path / "xss_report.html")
-        path = gen.generate(c.id, "html", output)
+        path = gen.generate(c.id, "html", output, skip_verify=True)
         content = Path(path).read_text()
 
         # Raw script/img tags must NOT appear — they should be escaped
@@ -50,7 +52,7 @@ class TestC01XSSPrevention:
 
         gen = ReportGenerator(case_mgr)
         output = str(tmp_path / "xss2_report.html")
-        path = gen.generate(c.id, "html", output)
+        path = gen.generate(c.id, "html", output, skip_verify=True)
         content = Path(path).read_text()
 
         assert "<script>document.cookie</script>" not in content
@@ -211,7 +213,7 @@ class TestH04SQLiteWALAndFK:
         """FK constraint rejects artifacts with nonexistent evidence_id."""
         mgr = CaseManager(tmp_path / "test.db")
         c = mgr.create_case("FK Test")
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.IntegrityError):
             mgr.add_artifact(c.id, "nonexistent_ev", "test", "test", "", "Test")
         mgr.close()
 
@@ -314,54 +316,147 @@ class TestM06BesselCorrection:
 # ── M-07: PDF fallback logs warning ────────────────────────────
 
 class TestM07PDFWarning:
-    def test_pdf_fallback_returns_html(self, case_mgr, tmp_path):
-        """PDF fallback returns HTML path with explanatory message."""
+    def test_pdf_fallback_returns_html(self, case_mgr, tmp_path, monkeypatch, caplog):
+        """PDF fallback returns HTML path + logs a warning when WeasyPrint absent.
+
+        M-07 fixed silent HTML fallback by adding a logging.warning. This test
+        forces the fallback path (simulating WeasyPrint unavailable) and asserts
+        the HTML file is written AND a WARNING is logged (the M-07 fix).
+        """
+        import logging
         c = case_mgr.create_case("PDF Test")
         case_mgr.add_evidence(c.id, "ev1", "disk", "/tmp/img.raw", "img.raw", 1024, "a" * 64, "b" * 32, "RAW")
         gen = ReportGenerator(case_mgr)
         output = str(tmp_path / "report.pdf")
-        path = gen.generate(c.id, "pdf", output)
-        # Should fallback to HTML
+
+        # Force the fallback path by making `from weasyprint import HTML` fail.
+        import builtins
+        real_import = builtins.__import__
+
+        def _no_weasyprint(name, *args, **kwargs):
+            if name == "weasyprint" or name.startswith("weasyprint."):
+                raise ImportError("simulated: weasyprint unavailable")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _no_weasyprint)
+
+        with caplog.at_level(logging.WARNING, logger="deaddrop.report.generator"):
+            path = gen.generate(c.id, "pdf", output, skip_verify=True)
+
+        # Fallback: path should reference an .html file
         assert ".html" in path
+        assert Path(path.split(" ")[0]).exists()
+        # M-07: a warning must be logged (not silent)
+        assert any(r.levelno >= logging.WARNING for r in caplog.records), \
+            "PDF fallback must log a warning (M-07 fix)"
+
+    def test_pdf_real_when_weasyprint_present(self, case_mgr, tmp_path):
+        """When WeasyPrint is installed (this venv), PDF generation produces a real PDF."""
+        try:
+            import weasyprint  # noqa: F401
+        except ImportError:
+            pytest.skip("WeasyPrint not installed; fallback path covered above")
+        c = case_mgr.create_case("PDF Real Test")
+        case_mgr.add_evidence(c.id, "ev1", "disk", "/tmp/img.raw", "img.raw", 1024, "a" * 64, "b" * 32, "RAW")
+        gen = ReportGenerator(case_mgr)
+        output = str(tmp_path / "report_real.pdf")
+        path = gen.generate(c.id, "pdf", output, skip_verify=True)
+        assert path.endswith(".pdf")
+        assert Path(path).read_bytes()[:5] == b"%PDF-"
 
 
-# ── H-06: Prefetch v30 SCCA signature check ────────────────────
+# ── H-06/SB-8: Prefetch SCCA parser (spec-conformance, not tautology) ──
+#
+# The prior tests packed run_count at offset 68 and the parser read offset 68 —
+# both wrong, test passed tautologically. These tests build fixtures with the
+# LITERAL spec offsets (0x10 for name, 0x90 for run_count) so a parser that
+# drifts from the spec fails. The parser's own constants are NOT imported here.
 
 class TestH06PrefetchV30Signature:
-    def test_v30_valid_scca(self, tmp_path):
-        """Valid v30 prefetch with SCCA signature parses correctly."""
+    def test_v30_valid_scca_reads_spec_offsets(self, tmp_path):
+        """v30 prefetch: name at 0x10, run_count at 0x90 — spec-conformance."""
         from deaddrop.disk.prefetch import PrefetchAnalyzer
         case_mgr = CaseManager(tmp_path / "test.db")
         analyzer = PrefetchAnalyzer(case_mgr)
 
         pf_file = tmp_path / "test.pf"
-        data = bytearray(1024)
-        struct.pack_into("<I", data, 0, 30)  # version
-        data[4:8] = b"SCCA"  # signature
-        struct.pack_into("<I", data, 68, 5)  # run_count
-        pf_file.write_bytes(bytes(data))
+        data = bytearray(256)
+        struct.pack_into("<I", data, 0x00, 30)        # version @ 0x00 (literal)
+        data[0x04:0x08] = b"SCCA"                      # signature @ 0x04 (literal)
+        # Executable name @ 0x10 (literal): 60 wchars UTF-16-LE, NUL-padded
+        name = "notepad.exe\x00".encode("utf-16-le")
+        data[0x10:0x10 + len(name)] = name
+        struct.pack_into("<I", data, 0x90, 7)         # run_count @ 0x90 (literal)
 
+        pf_file.write_bytes(bytes(data))
         result = analyzer.parse_prefetch_file(pf_file)
+
         assert result is not None
         assert result["version"] == 30
-        assert result["run_count"] == 5
+        assert result["run_count"] == 7
+        assert result["executable"] == "notepad.exe"
         case_mgr.close()
 
-    def test_v30_invalid_signature_fallback(self, tmp_path):
-        """v30 prefetch without SCCA signature falls back to path stem."""
+    def test_v30_invalid_signature_returns_none(self, tmp_path):
+        """v30 with a bad SCCA signature is rejected (fail-closed), not faked."""
         from deaddrop.disk.prefetch import PrefetchAnalyzer
         case_mgr = CaseManager(tmp_path / "test.db")
         analyzer = PrefetchAnalyzer(case_mgr)
 
         pf_file = tmp_path / "mymalware.pf"
-        data = bytearray(1024)
-        struct.pack_into("<I", data, 0, 30)  # version
-        data[4:8] = b"XXXX"  # wrong signature
-        pf_file.write_bytes(bytes(data))
+        data = bytearray(256)
+        struct.pack_into("<I", data, 0x00, 30)
+        data[0x04:0x08] = b"XXXX"  # wrong signature
 
+        pf_file.write_bytes(bytes(data))
+        result = analyzer.parse_prefetch_file(pf_file)
+        # Fail-closed: an invalid SCCA signature is NOT a prefetch file.
+        assert result is None
+        case_mgr.close()
+
+    def test_v23_win7_reads_spec_offsets(self, tmp_path):
+        """v23 (Win7) uses the same header layout — name@0x10, run_count@0x90."""
+        from deaddrop.disk.prefetch import PrefetchAnalyzer
+        case_mgr = CaseManager(tmp_path / "test.db")
+        analyzer = PrefetchAnalyzer(case_mgr)
+
+        pf_file = tmp_path / "win7.pf"
+        data = bytearray(256)
+        struct.pack_into("<I", data, 0x00, 23)
+        data[0x04:0x08] = b"SCCA"
+        name = "cmd.exe\x00".encode("utf-16-le")
+        data[0x10:0x10 + len(name)] = name
+        struct.pack_into("<I", data, 0x90, 42)
+
+        pf_file.write_bytes(bytes(data))
         result = analyzer.parse_prefetch_file(pf_file)
         assert result is not None
-        assert result["executable"] == "mymalware"  # fallback to path stem
+        assert result["version"] == 23
+        assert result["executable"] == "cmd.exe"
+        assert result["run_count"] == 42
+        case_mgr.close()
+
+    def test_unsupported_version_returns_none(self, tmp_path):
+        """An unknown SCCA version is rejected, not guessed at."""
+        from deaddrop.disk.prefetch import PrefetchAnalyzer
+        case_mgr = CaseManager(tmp_path / "test.db")
+        analyzer = PrefetchAnalyzer(case_mgr)
+        pf_file = tmp_path / "weird.pf"
+        data = bytearray(256)
+        struct.pack_into("<I", data, 0x00, 99)  # unsupported version
+        data[0x04:0x08] = b"SCCA"
+        pf_file.write_bytes(bytes(data))
+        assert analyzer.parse_prefetch_file(pf_file) is None
+        case_mgr.close()
+
+    def test_too_small_file_returns_none(self, tmp_path):
+        """A file too small to contain the header is rejected."""
+        from deaddrop.disk.prefetch import PrefetchAnalyzer
+        case_mgr = CaseManager(tmp_path / "test.db")
+        analyzer = PrefetchAnalyzer(case_mgr)
+        pf_file = tmp_path / "tiny.pf"
+        pf_file.write_bytes(b"SCCA" + b"\x00" * 10)  # 14 bytes, < 0x94
+        assert analyzer.parse_prefetch_file(pf_file) is None
         case_mgr.close()
 
 

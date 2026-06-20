@@ -1,11 +1,10 @@
 """MFT parser — parse Windows Master File Table entries."""
 
 import struct
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
-
 
 # MFT entry attributes
 ATTRIBUTE_TYPES = {
@@ -44,7 +43,7 @@ class MFTParser:
 
     def parse_mft(self, mft_path: Path) -> list[dict]:
         """Parse an MFT file and extract entry metadata."""
-        entries = []
+        entries: list[dict] = []
         if not mft_path.exists():
             return entries
 
@@ -82,8 +81,8 @@ class MFTParser:
             if data[:4] != b"FILE":
                 return None
 
-            struct.unpack_from("<H", data, 4)[0]  # fixup_offset
-            struct.unpack_from("<H", data, 6)[0]  # fixup_count
+            # fixup_offset (offset 4) and fixup_count (offset 6) are unused for
+            # our extraction — read sequence_number/flags/used_size only.
             sequence_number = struct.unpack_from("<H", data, 16)[0]
             flags = struct.unpack_from("<H", data, 22)[0]
             used_size = struct.unpack_from("<I", data, 24)[0]
@@ -108,16 +107,27 @@ class MFTParser:
                     break
 
                 if attr_type == 0x30 and attr_len > 66:  # $FILE_NAME
-                    # Extract filename from $FILE_NAME attribute
-                    name_offset = struct.unpack_from("<H", data, pos + 6)[0]
-                    name_pos = pos + name_offset
-                    # Skip the $FILE_NAME header (66 bytes from attr start)
-                    fn_header_size = 66
-                    if pos + fn_header_size + 2 < len(data):
-                        name_len = data[pos + fn_header_size]
-                        name_pos = pos + fn_header_size + 2
+                    # Content offset is relative to the attribute start (same
+                    # pattern as the L-03 $STANDARD_INFORMATION fix — SB-10: the
+                    # prior code hardcoded a 66-byte offset instead of reading
+                    # the content offset from the attribute header, so on any
+                    # hive where the content offset isn't exactly 0 the filename
+                    # was wrong). The $FILE_NAME content layout:
+                    #   content+0:  parent dir ref (8B), timestamps (32B), sizes
+                    #              (16B), flags (4B), reparse (4B)
+                    #   content+64: name length (1B, in chars)
+                    #   content+65: namespace (1B)
+                    #   content+66: name (UTF-16-LE, name_length chars)
+                    name_content_offset = struct.unpack_from("<H", data, pos + 6)[0]
+                    content_start = pos + name_content_offset
+                    name_len_pos = content_start + 64
+                    name_pos = content_start + 66
+                    if name_len_pos < len(data) and name_pos + 2 <= len(data):
+                        name_len = data[name_len_pos]
                         if name_pos + name_len * 2 <= len(data):
-                            filename = data[name_pos:name_pos + name_len * 2].decode("utf-16-le", errors="replace")
+                            filename = data[name_pos:name_pos + name_len * 2].decode(
+                                "utf-16-le", errors="replace"
+                            )
 
                 elif attr_type == 0x10 and attr_len > 72:  # $STANDARD_INFORMATION
                     # Content offset is relative to the attribute start
@@ -165,6 +175,6 @@ class MFTParser:
             unix_ts = (filetime / 10_000_000) - 11644473600
             if unix_ts < 0:
                 return ""
-            return datetime.fromtimestamp(unix_ts, tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(unix_ts, tz=UTC).isoformat()
         except (OSError, ValueError, OverflowError):
             return ""

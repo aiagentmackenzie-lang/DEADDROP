@@ -1,6 +1,6 @@
 """Artifact hunting package."""
 
-from deaddrop.hunt.yara_scanner import YARAScanner as YARAScanner
 from deaddrop.hunt.ioc_matcher import IOCMatcher as IOCMatcher
+from deaddrop.hunt.yara_scanner import YARAScanner as YARAScanner
 
-__all__ = ["YARAScanner", "IOCMatcher"]
+__all__ = ["IOCMatcher", "YARAScanner"]

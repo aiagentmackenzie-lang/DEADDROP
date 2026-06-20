@@ -28,9 +28,9 @@ export default function TimelineView({ caseId }: { caseId: string }) {
   async function fetchTimeline() {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/timeline/${caseId}`);
+      const res = await fetch(`${API}/cases/${caseId}/timeline`);
       const data = await res.json();
-      setEntries(data.entries || []);
+      setEntries(data.timeline || []);
     } catch {
       setEntries([]);
     }
@@ -41,7 +41,7 @@ export default function TimelineView({ caseId }: { caseId: string }) {
     if (!svgRef.current) return;
 
     const svg = d3.select(svgRef.current);
-    svg.selectAll('*").remove();
+    svg.selectAll('*').remove();
 
     const margin = { top: 20, right: 30, bottom: 40, left: 60 };
     const width = svgRef.current.clientWidth - margin.left - margin.right;

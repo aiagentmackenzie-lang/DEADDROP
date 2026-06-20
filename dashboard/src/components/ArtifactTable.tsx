@@ -23,7 +23,7 @@ export default function ArtifactTable({ caseId }: { caseId: string }) {
   async function fetchArtifacts() {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/artifacts/${caseId}`);
+      const res = await fetch(`${API}/cases/${caseId}/artifacts`);
       const data = await res.json();
       setArtifacts(data.artifacts || []);
     } catch {

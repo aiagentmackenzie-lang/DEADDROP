@@ -1,8 +1,8 @@
 """Report generator — HTML and PDF forensic case reports."""
 
 import html as html_module
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
@@ -13,31 +13,56 @@ class ReportGenerator:
     def __init__(self, case_manager: CaseManager):
         self.mgr = case_manager
 
-    def generate(self, case_id: str, fmt: str = "html", output_path: str | None = None) -> str:
-        """Generate a case report in HTML or PDF format."""
+    def generate(self, case_id: str, fmt: str = "html", output_path: str | None = None,
+                 skip_verify: bool = False) -> str:
+        """Generate a case report in HTML or PDF format.
+
+        Chain-of-custody gate (Phase 4): by default, re-verifies every evidence
+        item's SHA-256/MD5 before rendering and raises ValueError if any evidence
+        file is missing or its hash no longer matches the ingestion record. This
+        prevents a court report from being generated against tampered or missing
+        evidence. Pass ``skip_verify=True`` only with explicit analyst sign-off.
+        """
         case = self.mgr.get_case(case_id)
         if not case:
             raise ValueError(f"Case {case_id} not found")
 
         evidence = self.mgr.list_evidence(case_id)
+
+        # Integrity gate — fail-closed for court reports.
+        if not skip_verify:
+            from deaddrop.core.evidence import EvidenceManager
+            em = EvidenceManager(self.mgr)
+            failures = []
+            for ev in evidence:
+                v = em.verify_evidence(case_id, ev["id"])
+                if not v["verified"]:
+                    failures.append({"evidence_id": ev["id"], "filename": ev["filename"],
+                                     "reason": v.get("reason", "hash mismatch")})
+            if failures:
+                raise ValueError(
+                    "Refusing to generate report: chain-of-custody verification "
+                    f"failed for {len(failures)} evidence item(s): {failures}"
+                )
+
         artifacts = self.mgr.list_artifacts(case_id)
         timeline = self.mgr.get_timeline(case_id)
         hunt_results = self.mgr.get_hunt_results(case_id)
 
         # Severity breakdown
-        severity_counts = {}
+        severity_counts: dict[str, int] = {}
         for a in artifacts:
             sev = a.get("severity", "info")
             severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
         # Source breakdown
-        source_counts = {}
+        source_counts: dict[str, int] = {}
         for a in artifacts:
             src = a.get("source", "unknown")
             source_counts[src] = source_counts.get(src, 0) + 1
 
         if not output_path:
-            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             output_dir = Path(f"deaddrop_exports/case_{case_id}")
             output_dir.mkdir(parents=True, exist_ok=True)
             ext = ".html" if fmt == "html" else ".pdf"
@@ -56,11 +81,16 @@ class ReportGenerator:
             try:
                 from weasyprint import HTML
                 HTML(string=html_content).write_pdf(str(path))
-            except (ImportError, OSError, Exception) as e:
-                # Fallback: save as HTML (weasyprint or system libs not available)
+            except (ImportError, OSError) as e:
+                # Fallback: save as HTML (weasyprint or system libs not available).
+                # Narrow catch — ImportError = weasyprint not installed; OSError =
+                # missing system libs (pango, gdk-pixbuf). Other exceptions
+                # (programming errors, bad HTML) propagate so real bugs surface
+                # instead of being silently masked as "PDF unavailable".
                 import logging
                 logging.getLogger(__name__).warning(
-                    f"PDF generation failed ({type(e).__name__}: {e}), saving as HTML instead"
+                    "PDF generation failed (%s: %s), saving as HTML instead",
+                    type(e).__name__, e
                 )
                 html_path = path.with_suffix(".html")
                 html_path.write_text(html_content, encoding="utf-8")
@@ -140,7 +170,7 @@ class ReportGenerator:
             risk_level = "LOW"
             risk_color = "#16a34a"
 
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         # Severity and source distribution rows — keys are enum values but escape defensively
         sev_rows = " ".join(

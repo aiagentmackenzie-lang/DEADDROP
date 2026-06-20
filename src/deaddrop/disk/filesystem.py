@@ -1,15 +1,15 @@
 """Filesystem analyzer — parse filesystem structures from disk images."""
 
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
 
 class FilesystemAnalyzer:
     """Analyze filesystem structures from disk images.
-    
+
     Uses pytsk3 when available, falls back to raw binary parsing.
     """
 
@@ -79,18 +79,25 @@ class FilesystemAnalyzer:
         """Analyze using The Sleuth Kit Python bindings (pytsk3)."""
         import pytsk3
 
-        entries = []
+        entries: list[dict] = []
         total = 0
         deleted = 0
+        # Hard caps to bound memory and runtime on large images (H-4).
+        MAX_ENTRIES = 5000
+        MAX_DEPTH = 20  # pathological depth → likely circular/attack structure
 
         try:
             img_info = pytsk3.Img_Info(str(image_path))
             fs_info = pytsk3.FS_Info(img_info)
             root = fs_info.open_dir(path="/")
 
-            def walk_dir(directory, path="/"):
+            def walk_dir(directory, path="/", depth=0):
                 nonlocal total, deleted
+                if depth >= MAX_DEPTH or len(entries) >= MAX_ENTRIES:
+                    return
                 for entry in directory:
+                    if len(entries) >= MAX_ENTRIES:
+                        break
                     name = entry.info.name.name
                     if isinstance(name, bytes):
                         name = name.decode("utf-8", errors="replace")
@@ -107,7 +114,7 @@ class FilesystemAnalyzer:
                         try:
                             ts = meta.crtime
                             if ts and ts > 0:
-                                timestamp = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                                timestamp = datetime.fromtimestamp(ts, tz=UTC).isoformat()
                         except (OSError, ValueError):
                             pass
 
@@ -124,11 +131,11 @@ class FilesystemAnalyzer:
                         "size": meta.size if meta and hasattr(meta, "size") else 0,
                     })
 
-                    # Recurse into directories
+                    # Recurse into directories with a depth cap
                     if meta and meta.type == pytsk3.TSK_FS_META_TYPE_DIR:
                         try:
                             subdir = fs_info.open_dir(inode=meta.addr)
-                            walk_dir(subdir, full_path + "/")
+                            walk_dir(subdir, full_path + "/", depth + 1)
                         except Exception:
                             pass
 
@@ -141,7 +148,7 @@ class FilesystemAnalyzer:
             "total_files": total,
             "deleted_files": deleted,
             "carved_files": 0,
-            "entries": entries[:5000],  # Cap to prevent memory issues
+            "entries": entries,  # already capped at MAX_ENTRIES during walk
         }
 
     def _analyze_raw(self, image_path: Path) -> dict:
@@ -152,7 +159,7 @@ class FilesystemAnalyzer:
         entries.append({
             "path": str(image_path),
             "category": "disk_image",
-            "timestamp": datetime.fromtimestamp(image_path.stat().st_mtime, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(image_path.stat().st_mtime, tz=UTC).isoformat(),
             "description": f"Disk image: {image_path.name} ({size:,} bytes)",
             "severity": "info",
             "size": size,

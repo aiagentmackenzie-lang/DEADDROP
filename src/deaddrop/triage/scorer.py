@@ -1,7 +1,7 @@
 """Triage scorer — aggregate anomaly scores and prioritize findings."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from deaddrop.core.case import CaseManager
 from deaddrop.triage.anomaly import AnomalyDetector
@@ -34,7 +34,7 @@ class TriageScorer:
                 evidence_id=None,
                 source="triage",
                 category=anomaly.get("type", "anomaly"),
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 description=anomaly.get("description", ""),
                 severity=anomaly.get("severity", "info"),
                 data=str(anomaly),
@@ -62,8 +62,8 @@ class TriageScorer:
         anomaly_score = sum(a.get("score", 0) for a in anomalies)
 
         # Normalize to 0-100
-        total = raw_score + anomaly_score * 2
-        return min(round(total, 1), 100.0)
+        total = raw_score + float(anomaly_score) * 2
+        return float(min(round(total, 1), 100.0))
 
     @staticmethod
     def _risk_level(score: float) -> str:

@@ -1,6 +1,8 @@
 """Memory analyzer — extract and correlate memory artifacts."""
 
 
+from typing import ClassVar
+
 from deaddrop.core.case import CaseManager
 from deaddrop.memory.volatility import VolatilityWrapper
 
@@ -8,7 +10,7 @@ from deaddrop.memory.volatility import VolatilityWrapper
 class MemoryAnalyzer:
     """High-level memory analysis — correlate artifacts from multiple plugins."""
 
-    SUSPICIOUS_PATTERNS = {
+    SUSPICIOUS_PATTERNS: ClassVar[dict[str, list[str]]] = {
         "injection": ["malfind", "vadyarascan"],
         "persistence": ["registry.printkey", "pslist"],
         "lateral_movement": ["netscan", "netstat"],

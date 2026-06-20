@@ -1,6 +1,7 @@
 """Hash Verifier Plugin — Re-verify evidence integrity."""
 
 from pathlib import Path
+
 from deaddrop.core.case import CaseManager
 from deaddrop.core.evidence import compute_hashes
 

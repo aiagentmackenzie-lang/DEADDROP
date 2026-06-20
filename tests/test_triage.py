@@ -3,8 +3,8 @@
 import pytest
 
 from deaddrop.core.case import CaseManager
-from deaddrop.triage.scorer import TriageScorer
 from deaddrop.triage.anomaly import AnomalyDetector
+from deaddrop.triage.scorer import TriageScorer
 
 
 @pytest.fixture

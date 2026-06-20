@@ -40,7 +40,7 @@ class AnomalyDetector:
 
     def _detect_temporal_bursts(self, entries: list[dict]) -> list[dict]:
         """Detect bursts of activity (many events in short time)."""
-        anomalies = []
+        anomalies: list[dict] = []
         if len(entries) < 5:
             return anomalies
 
@@ -141,7 +141,7 @@ class AnomalyDetector:
         Checks for temporal ordering — earlier-phase sources must appear
         before later-phase sources to flag a pattern.
         """
-        anomalies = []
+        anomalies: list[dict] = []
 
         # Build ordered source sequence from sorted timeline
         sources = [e.get("source", "") for e in entries if e.get("source")]

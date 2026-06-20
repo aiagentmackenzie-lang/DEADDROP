@@ -1,10 +1,11 @@
 """Tests for MFT Parser — NTFS Master File Table parsing."""
 
 import struct
+
 import pytest
 
-from deaddrop.disk.mft import MFTParser
 from deaddrop.core.case import CaseManager
+from deaddrop.disk.mft import MFTParser
 
 
 @pytest.fixture

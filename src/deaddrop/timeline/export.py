@@ -2,8 +2,8 @@
 
 import csv
 import json
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
@@ -19,7 +19,7 @@ class TimelineExporter:
         entries = self.mgr.get_timeline(case_id)
 
         if not output_path:
-            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             output_dir = Path(f"deaddrop_exports/case_{case_id}")
             output_dir.mkdir(parents=True, exist_ok=True)
             ext = {"csv": ".csv", "json": ".json", "body": ".body"}
@@ -59,7 +59,7 @@ class TimelineExporter:
 
     def _export_body(self, entries: list[dict], path: Path) -> None:
         """Export in TSK body file format (mactime compatible).
-        
+
         Body file format:
         MD5|name|inode|mode_as_string|UID|GID|size|atime|mtime|ctime|crtime
         """
