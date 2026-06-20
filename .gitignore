@@ -36,6 +36,10 @@ credentials.json
 # Node
 node_modules/
 
+# Dashboard build output (served by the API at runtime; built in Docker stage 1)
+dashboard/dist/
+dashboard/tsconfig.tsbuildinfo
+
 # Test / coverage
 .pytest_cache/
 htmlcov/

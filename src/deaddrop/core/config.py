@@ -1,12 +1,27 @@
 """Configuration management."""
 
+from __future__ import annotations
+
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_DB_PATH = Path.home() / ".deaddrop" / "cases.db"
+
+def _deaddrop_home() -> Path:
+    """Resolve the DEADDROP home directory.
+
+    Honors the DEADDROP_HOME env var (test/operator isolation) over Path.home().
+    """
+    env = os.environ.get("DEADDROP_HOME")
+    if env:
+        return Path(env)
+    return Path.home()
+
+
+DEFAULT_DB_PATH = _deaddrop_home() / ".deaddrop" / "cases.db"
 DEFAULT_RULES_DIR = Path(__file__).parent.parent.parent.parent / "rules"
-DEFAULT_PLUGINS_DIR = Path.home() / ".deaddrop" / "plugins"
+DEFAULT_PLUGINS_DIR = _deaddrop_home() / ".deaddrop" / "plugins"
 
 
 @dataclass
@@ -16,11 +31,11 @@ class Config:
     plugins_dir: Path = DEFAULT_PLUGINS_DIR
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3"
-    server_host: str = "0.0.0.0"
+    server_host: str = "127.0.0.1"
     server_port: int = 8080
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "Config":
+    def load(cls, path: Path | None = None) -> Config:
         if path and path.exists():
             data = json.loads(path.read_text())
             return cls(
@@ -29,10 +44,16 @@ class Config:
                 plugins_dir=Path(data.get("plugins_dir", str(DEFAULT_PLUGINS_DIR))),
                 ollama_url=data.get("ollama_url", "http://localhost:11434"),
                 ollama_model=data.get("ollama_model", "llama3"),
-                server_host=data.get("server_host", "0.0.0.0"),
+                server_host=data.get("server_host", "127.0.0.1"),
                 server_port=data.get("server_port", 8080),
             )
-        return cls()
+        # Resolve defaults fresh from env (DEADDROP_HOME) at call time so test
+        # isolation via monkeypatch.setenv actually takes effect.
+        return cls(
+            db_path=_deaddrop_home() / ".deaddrop" / "cases.db",
+            rules_dir=DEFAULT_RULES_DIR,
+            plugins_dir=_deaddrop_home() / ".deaddrop" / "plugins",
+        )
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

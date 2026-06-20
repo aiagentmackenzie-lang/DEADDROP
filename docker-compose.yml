@@ -1,42 +1,26 @@
-version: "3.8"
-
 services:
-  engine:
+  deaddrop:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: deaddrop-engine
+    image: deaddrop:latest
+    container_name: deaddrop
+    ports:
+      - "8080:8080"
     volumes:
       - deaddrop-data:/root/.deaddrop
       - ./rules:/app/rules:ro
     environment:
-      - PYTHONUNBUFFERED=1
-    command: ["tail", "-f", "/dev/null"]  # Keep alive for CLI
-
-  server:
-    build:
-      context: ./server
-      dockerfile: docker/Dockerfile
-    container_name: deaddrop-server
-    ports:
-      - "8080:8080"
-    environment:
-      - HOST=0.0.0.0
-      - PORT=8080
-    depends_on:
-      - engine
-    volumes:
-      - deaddrop-data:/root/.deaddrop
-
-  dashboard:
-    build:
-      context: ./dashboard
-      dockerfile: Dockerfile
-    container_name: deaddrop-dashboard
-    ports:
-      - "3000:80"
-    depends_on:
-      - server
+      # ALWAYS set a token before exposing port 8080 beyond localhost.
+      # The API authenticates Bearer tokens against this value.
+      DEADDROP_API_TOKEN: ${DEADDROP_API_TOKEN:-}
+      DEADDROP_HOST: 0.0.0.0
+      DEADDROP_PORT: 8080
+      # Optional: restrict CORS to specific origins (comma-separated)
+      DEADDROP_CORS_ORIGINS: ${DEADDROP_CORS_ORIGINS:-}
+      # Ollama endpoint for AI triage summaries (optional)
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+    restart: unless-stopped
 
 volumes:
   deaddrop-data:

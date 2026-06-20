@@ -12,7 +12,7 @@ class TestConfig:
         cfg = Config()
         assert cfg.ollama_url == "http://localhost:11434"
         assert cfg.ollama_model == "llama3"
-        assert cfg.server_host == "0.0.0.0"
+        assert cfg.server_host == "127.0.0.1"
         assert cfg.server_port == 8080
 
     def test_load_from_file(self, tmp_path):
@@ -28,7 +28,7 @@ class TestConfig:
         assert cfg.ollama_model == "mistral"
         assert cfg.server_port == 9090
         # Defaults preserved for missing keys
-        assert cfg.server_host == "0.0.0.0"
+        assert cfg.server_host == "127.0.0.1"
 
     def test_load_nonexistent_file(self):
         """Loading from nonexistent path returns defaults."""

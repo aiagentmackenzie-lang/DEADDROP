@@ -1,0 +1,35 @@
+# Build artifacts
+.venv/
+venv/
+node_modules/
+dashboard/dist/
+dashboard/node_modules/
+server/node_modules/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Local dev / secrets
+.env
+.env.*
+*.secret
+credentials.json
+deaddrop_exports/
+
+# Audit artifacts (internal)
+BUG_CATALOG.md
+README_AUDIT.md
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp

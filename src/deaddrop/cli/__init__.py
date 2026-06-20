@@ -1,7 +1,5 @@
 """DEADDROP CLI — Digital Forensics Toolkit."""
 
-from pathlib import Path
-
 import click
 from rich.console import Console
 from rich.table import Table
@@ -381,32 +379,25 @@ def report_generate(case_id: str, fmt: str, output: str | None):
 
 @cli.command("dashboard")
 @click.option("--port", "-p", default=8080, help="Port number")
-@click.option("--host", "-h", default="0.0.0.0", help="Host")
+@click.option("--host", "-h", default="127.0.0.1", help="Host (default 127.0.0.1 — do not bind 0.0.0.0 without auth)")
 def dashboard(port: int, host: str):
-    """Launch the web dashboard (Fastify API server)."""
+    """Launch the DEADDROP API + dashboard (in-process FastAPI server).
+
+    Serves the REST API on the given port and, if the React dashboard has been
+    built (`cd dashboard && npm run build`), serves it at the same origin — so
+    the dashboard works without a separate dev server. Set DEADDROP_API_TOKEN
+    before binding to a non-loopback interface.
+    """
     import os as _os
-    import subprocess
-    server_dir = Path(__file__).parent.parent.parent.parent / "server"
-    if not server_dir.exists():
-        console.print("[red]Server directory not found. Install the server dependencies first:[/red]")
-        console.print("  cd server && npm install")
-        return
-    # Check if npm is available
-    try:
-        subprocess.run(["npm", "--version"], capture_output=True, check=True)
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        console.print("[red]npm not found. Install Node.js to run the dashboard.[/red]")
-        return
-    # Install deps if needed
-    if not (server_dir / "node_modules").exists():
-        console.print("[bold]Installing server dependencies...[/bold]")
-        subprocess.run(["npm", "install"], cwd=str(server_dir), check=True)
-    # Start the server
-    console.print(f"[bold]Launching DEADDROP dashboard on {host}:{port}...[/bold]")
-    console.print(f"  API:     http://{host}:{port}")
-    console.print("  Dashboard: http://localhost:3000 (start separately: cd dashboard && npm run dev)")
-    env = {**_os.environ, "HOST": host, "PORT": str(port)}
-    subprocess.run(["npx", "tsx", "src/index.ts"], cwd=str(server_dir), env=env)
+
+    from deaddrop.api import run_server
+    console.print(f"[bold]Launching DEADDROP API on {host}:{port}...[/bold]")
+    console.print(f"  API:       http://{host}:{port}/api/health")
+    console.print(f"  Dashboard: http://{host}:{port}/  (if built)")
+    console.print(f"  WebSocket: ws://{host}:{port}/ws")
+    if host not in ("127.0.0.1", "localhost") and not _os.environ.get("DEADDROP_API_TOKEN"):
+        console.print("[bold red]⚠ Binding non-loopback without DEADDROP_API_TOKEN set — auth is DISABLED.[/bold red]")
+    run_server(host=host, port=port)
 
 
 # ── Plugin commands ───────────────────────────────────────────
