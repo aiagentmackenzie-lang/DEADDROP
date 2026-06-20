@@ -2,11 +2,10 @@
 
 import hashlib
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
-
 
 SUPPORTED_DISK_FORMATS = {".dd", ".raw", ".e01", ".vmdk", ".qcow2", ".iso", ".img"}
 SUPPORTED_MEMORY_FORMATS = {".raw", ".vmem", ".dmp", ".elf"}
@@ -100,7 +99,7 @@ class EvidenceManager:
             "sha256": sha256,
             "md5": md5,
             "format": fmt,
-            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "ingested_at": datetime.now(UTC).isoformat(),
             "verified": True,
         }
 
@@ -136,7 +135,7 @@ class EvidenceManager:
             "sha256": sha256,
             "md5": md5,
             "format": fmt,
-            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "ingested_at": datetime.now(UTC).isoformat(),
             "verified": True,
         }
 

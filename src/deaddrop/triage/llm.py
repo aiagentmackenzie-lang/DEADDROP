@@ -57,7 +57,7 @@ class LLMSummarizer:
         ])
 
         # Severity breakdown
-        severity_counts = {}
+        severity_counts: dict[str, int] = {}
         for a in artifacts:
             sev = a.get("severity", "info")
             severity_counts[sev] = severity_counts.get(sev, 0) + 1
@@ -83,7 +83,7 @@ class LLMSummarizer:
         try:
             import httpx
         except ImportError:
-            raise RuntimeError("httpx not installed")
+            raise RuntimeError("httpx not installed") from None
 
         prompt = f"""You are a digital forensics analyst. Based on the following case data, provide a concise professional summary including:
 1. Case overview
@@ -108,7 +108,7 @@ Provide a clear, professional summary:"""
 
         if response.status_code == 200:
             data = response.json()
-            return data.get("response", "No summary generated.")
+            return str(data.get("response", "No summary generated."))
 
         return f"Ollama error: {response.status_code}"
 
@@ -128,8 +128,8 @@ Provide a clear, professional summary:"""
             size_mb = ev['size_bytes'] / (1024 * 1024)
             parts.append(f"  • {ev['filename']} ({ev['format']}, {size_mb:.1f} MB)")
 
-        severity_counts = {}
-        source_counts = {}
+        severity_counts: dict[str, int] = {}
+        source_counts: dict[str, int] = {}
         for a in artifacts:
             severity_counts[a.get("severity", "info")] = severity_counts.get(a.get("severity", "info"), 0) + 1
             source_counts[a.get("source", "unknown")] = source_counts.get(a.get("source", "unknown"), 0) + 1

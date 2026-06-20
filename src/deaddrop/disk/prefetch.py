@@ -1,7 +1,7 @@
 """Prefetch analyzer — parse Windows prefetch files for execution evidence."""
 
-import uuid
 import struct
+import uuid
 from pathlib import Path
 
 from deaddrop.core.case import CaseManager
@@ -72,7 +72,7 @@ class PrefetchAnalyzer:
 
     def parse_prefetch_file(self, pf_path: Path) -> dict | None:
         """Parse a single Windows prefetch file (MAM format).
-        
+
         Supports Windows 10+ (version 30) and Windows 7 (version 23) formats.
         """
         if not pf_path.exists():

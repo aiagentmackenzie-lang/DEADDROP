@@ -1,12 +1,16 @@
 """Plugin manager — load, list, and run DEADDROP plugins."""
 
-import importlib
+import importlib.util
 import json
-from pathlib import Path
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
+from pathlib import Path
+from typing import Any
 
 from deaddrop.core.config import Config
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -99,7 +103,10 @@ class PluginManager:
             entry_file = plugin_dir / f"{entry_module}.py"
 
             if entry_file.exists():
-                # Dynamic import
+                # Dynamic import via importlib.util — note: `import importlib`
+                # alone does NOT expose `importlib.util` in Py3.12+; it must be
+                # imported explicitly (this was the SB-1 crash: `deaddrop plugin
+                # list` raised AttributeError).
                 spec = importlib.util.spec_from_file_location(
                     f"deaddrop_plugin_{name}", str(entry_file)
                 )
@@ -108,10 +115,10 @@ class PluginManager:
                     spec.loader.exec_module(module)
                     entry_point = getattr(module, "run", lambda case_id, **kw: {"status": "ok"})
                 else:
-                    def entry_point(case_id, **kw):  # type: ignore[misc]
+                    def entry_point(case_id: str, **kw: Any) -> dict[str, Any]:
                         return {"status": "no_entry"}
             else:
-                def entry_point(case_id, **kw):  # type: ignore[misc]
+                def entry_point(case_id: str, **kw: Any) -> dict[str, Any]:
                     return {"status": "no_file"}
 
             self.plugins[name] = Plugin(
@@ -121,5 +128,7 @@ class PluginManager:
                 hooks=hooks,
                 entry_point=entry_point,
             )
-        except (json.JSONDecodeError, OSError, ImportError):
-            pass
+        except (json.JSONDecodeError, OSError, ImportError, AttributeError) as e:
+            # AttributeError covers malformed plugin modules missing expected
+            # attributes; we skip the plugin rather than crashing the manager.
+            log.warning("Failed to load plugin from %s: %s", plugin_dir, e)

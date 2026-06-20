@@ -45,7 +45,7 @@ class TestHashVerification:
         assert sha1 != sha2
 
     def test_verify_integrity(self, sample_file):
-        sha256, md5 = compute_hashes(sample_file)
+        sha256, _md5 = compute_hashes(sample_file)
         assert verify_integrity(sample_file, sha256) is True
         assert verify_integrity(sample_file, "0" * 64) is False
 

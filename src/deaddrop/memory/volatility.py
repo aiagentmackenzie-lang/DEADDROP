@@ -1,13 +1,13 @@
 """Volatility3 wrapper — run memory forensics plugins through DEADDROP."""
 
-import uuid
-import subprocess
 import json
 import shutil
+import subprocess
+import uuid
 from pathlib import Path
+from typing import ClassVar
 
 from deaddrop.core.case import CaseManager
-
 
 # Common Volatility3 plugins for forensic analysis
 DEFAULT_PLUGINS = {
@@ -60,7 +60,7 @@ class VolatilityWrapper:
         return "vol"
 
     # Allowed Volatility3 plugins — prevents command injection via plugin name
-    ALLOWED_PLUGINS = set(DEFAULT_PLUGINS.keys())
+    ALLOWED_PLUGINS: ClassVar[set[str]] = set(DEFAULT_PLUGINS.keys())
 
     def run_plugin(self, case_id: str, evidence_id: str | None, plugin: str) -> dict:
         """Run a Volatility3 plugin against memory evidence in a case."""
@@ -156,7 +156,7 @@ class VolatilityWrapper:
         # Skip header row (first non-separator line) and Volatility banner
         header_skipped = False
         for line in lines:
-            if not line or line.startswith("Volatility") or line.startswith("="):
+            if not line or line.startswith(("Volatility", "=")):
                 continue
             # Skip the first data line as column header
             if not header_skipped:
@@ -191,7 +191,7 @@ class VolatilityWrapper:
 
             # Build description
             for key in ["Process", "ImageFileName", "Offset", "Name"]:
-                if key in row and row[key]:
+                if row.get(key):
                     desc_parts.append(f"{key}={row[key]}")
 
             description = f"[{plugin}] " + " | ".join(desc_parts) if desc_parts else f"[{plugin}] {row}"

@@ -38,5 +38,34 @@ where = ["src"]
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.lint]
+# Pragmatic rule set — enforced in CI, not aspirational.
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "PIE", "RUF"]
+ignore = ["E501"]  # line length handled by formatter; ruff line-length is a soft guide
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+# Annotations are added as each module is rewritten across hardening phases.
+# The gate is enforced (check_untyped_defs catches real type bugs in bodies:
+# Optional arithmetic, wrong contracts, attr-defined) without demanding return
+# annotations on every Click callback up front. Tighten once the annotation
+# pass completes.
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+# Built-in plugins are dynamically loaded (spec_from_file_location), not part of
+# the typed package surface. Excluding them avoids duplicate-module collisions
+# (three `main.py` files) without weakening the core-engine type gate.
+exclude = ["src/deaddrop/plugins/builtin/"]
+
+[[tool.mypy.overrides]]
+# Forensics libs without stubs — don't fail the gate on their type hints.
+module = ["yara", "pytsk3", "volatility3.*", "weasyprint.*", "evtx.*", "Registry.*", "libscca.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

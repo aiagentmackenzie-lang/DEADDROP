@@ -1,11 +1,10 @@
 """YARA scanner — scan evidence with YARA rules."""
 
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
-
 
 # Built-in YARA rules for common forensic indicators
 BUILTIN_RULES = {
@@ -178,7 +177,7 @@ class YARAScanner:
             # For memory dumps and other files, scan directly
             try:
                 if ev["type"] == "memory" or ev_path.stat().st_size < 500 * 1024 * 1024:
-                    for rule_name, compiled in compiled_rules.items():
+                    for _rule_name, compiled in compiled_rules.items():
                         matches = compiled.match(str(ev_path))
                         for match in matches:
                             severity = "medium"
@@ -204,7 +203,7 @@ class YARAScanner:
                                 evidence_id=ev["id"],
                                 source="hunt",
                                 category="yara_match",
-                                timestamp=datetime.now(timezone.utc).isoformat(),
+                                timestamp=datetime.now(UTC).isoformat(),
                                 description=f"YARA match: {match.rule} in {ev['filename']}",
                                 severity=severity,
                                 data=str({"rule": match.rule, "strings": [str(s) for s in match.strings[:5]]}),

@@ -3,8 +3,9 @@
 **Unified DFIR toolkit with AI-assisted triage, modern web dashboard, and automated reporting.**
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://python.org)
-[![Tests: 128 passing](https://img.shields.io/badge/Tests-128%20passing-brightgreen.svg)](tests/)
-[![Lint: 0 errors](https://img.shields.io/badge/Ruff-0%20errors-green.svg)](https://docs.astral.sh/ruff/)
+[![Tests: 129 passing](https://img.shields.io/badge/Tests-129%20passing-brightgreen.svg)](tests/)
+[![Lint: ruff clean](https://img.shields.io/badge/Ruff-clean-green.svg)](https://docs.astral.sh/ruff/)
+[![Types: mypy clean](https://img.shields.io/badge/mypy-clean-green.svg)](https://mypy-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -164,11 +165,14 @@ cd dashboard && npm install && npm run dev
 ## 🧪 Testing
 
 ```bash
-# Run full test suite (128 tests)
+# Run full test suite (129 tests)
 pytest tests/ -v
 
-# Lint check (0 errors)
+# Lint check (ruff clean)
 ruff check src/ tests/
+
+# Type check (mypy clean)
+mypy src
 ```
 
 Test coverage spans: case management, evidence ingestion, file carving, MFT parsing, anomaly detection, triage scoring, timeline engine, report generation, config, and CLI commands.

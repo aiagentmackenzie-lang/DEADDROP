@@ -1,16 +1,18 @@
 """Tests for bug fixes — validates all 20 bugs from BUG_CATALOG.md are fixed."""
 
+import sqlite3
 import struct
-import pytest
 from pathlib import Path
 
+import pytest
+
 from deaddrop.core.case import CaseManager
-from deaddrop.hunt.ioc_matcher import IOCMatcher, IOC_PATTERNS
-from deaddrop.disk.carving import FileCarver, SIGNATURES
+from deaddrop.disk.carving import SIGNATURES, FileCarver
+from deaddrop.hunt.ioc_matcher import IOC_PATTERNS, IOCMatcher
 from deaddrop.report.generator import ReportGenerator
-from deaddrop.triage.scorer import TriageScorer
-from deaddrop.triage.anomaly import AnomalyDetector
 from deaddrop.timeline.export import TimelineExporter
+from deaddrop.triage.anomaly import AnomalyDetector
+from deaddrop.triage.scorer import TriageScorer
 
 
 @pytest.fixture
@@ -211,7 +213,7 @@ class TestH04SQLiteWALAndFK:
         """FK constraint rejects artifacts with nonexistent evidence_id."""
         mgr = CaseManager(tmp_path / "test.db")
         c = mgr.create_case("FK Test")
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.IntegrityError):
             mgr.add_artifact(c.id, "nonexistent_ev", "test", "test", "", "Test")
         mgr.close()
 
@@ -314,15 +316,53 @@ class TestM06BesselCorrection:
 # ── M-07: PDF fallback logs warning ────────────────────────────
 
 class TestM07PDFWarning:
-    def test_pdf_fallback_returns_html(self, case_mgr, tmp_path):
-        """PDF fallback returns HTML path with explanatory message."""
+    def test_pdf_fallback_returns_html(self, case_mgr, tmp_path, monkeypatch, caplog):
+        """PDF fallback returns HTML path + logs a warning when WeasyPrint absent.
+
+        M-07 fixed silent HTML fallback by adding a logging.warning. This test
+        forces the fallback path (simulating WeasyPrint unavailable) and asserts
+        the HTML file is written AND a WARNING is logged (the M-07 fix).
+        """
+        import logging
         c = case_mgr.create_case("PDF Test")
         case_mgr.add_evidence(c.id, "ev1", "disk", "/tmp/img.raw", "img.raw", 1024, "a" * 64, "b" * 32, "RAW")
         gen = ReportGenerator(case_mgr)
         output = str(tmp_path / "report.pdf")
-        path = gen.generate(c.id, "pdf", output)
-        # Should fallback to HTML
+
+        # Force the fallback path by making `from weasyprint import HTML` fail.
+        import builtins
+        real_import = builtins.__import__
+
+        def _no_weasyprint(name, *args, **kwargs):
+            if name == "weasyprint" or name.startswith("weasyprint."):
+                raise ImportError("simulated: weasyprint unavailable")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _no_weasyprint)
+
+        with caplog.at_level(logging.WARNING, logger="deaddrop.report.generator"):
+            path = gen.generate(c.id, "pdf", output)
+
+        # Fallback: path should reference an .html file
         assert ".html" in path
+        assert Path(path.split(" ")[0]).exists()
+        # M-07: a warning must be logged (not silent)
+        assert any(r.levelno >= logging.WARNING for r in caplog.records), \
+            "PDF fallback must log a warning (M-07 fix)"
+
+    def test_pdf_real_when_weasyprint_present(self, case_mgr, tmp_path):
+        """When WeasyPrint is installed (this venv), PDF generation produces a real PDF."""
+        try:
+            import weasyprint  # noqa: F401
+        except ImportError:
+            pytest.skip("WeasyPrint not installed; fallback path covered above")
+        c = case_mgr.create_case("PDF Real Test")
+        case_mgr.add_evidence(c.id, "ev1", "disk", "/tmp/img.raw", "img.raw", 1024, "a" * 64, "b" * 32, "RAW")
+        gen = ReportGenerator(case_mgr)
+        output = str(tmp_path / "report_real.pdf")
+        path = gen.generate(c.id, "pdf", output)
+        assert path.endswith(".pdf")
+        assert Path(path).read_bytes()[:5] == b"%PDF-"
 
 
 # ── H-06: Prefetch v30 SCCA signature check ────────────────────

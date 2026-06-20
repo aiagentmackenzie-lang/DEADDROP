@@ -1,8 +1,8 @@
 """Configuration management."""
 
-from pathlib import Path
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
+from pathlib import Path
 
 DEFAULT_DB_PATH = Path.home() / ".deaddrop" / "cases.db"
 DEFAULT_RULES_DIR = Path(__file__).parent.parent.parent.parent / "rules"

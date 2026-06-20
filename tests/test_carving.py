@@ -1,7 +1,8 @@
 """Tests for FileCarver — stream-based file recovery."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from deaddrop.disk.carving import FileCarver
 

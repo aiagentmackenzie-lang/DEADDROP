@@ -1,11 +1,10 @@
 """Windows registry analyzer — parse registry hives for forensic artifacts."""
 
-import uuid
 import struct
+import uuid
 from pathlib import Path
 
 from deaddrop.core.case import CaseManager
-
 
 # Known forensic registry keys
 FORENSIC_KEYS = {
@@ -106,11 +105,11 @@ class RegistryAnalyzer:
 
     def parse_hive(self, hive_path: Path) -> list[dict]:
         """Parse a raw registry hive file.
-        
+
         Basic parser for Windows registry hive format.
         Reads hive bin structure and extracts key/value pairs.
         """
-        artifacts = []
+        artifacts: list[dict] = []
         if not hive_path.exists():
             return artifacts
 

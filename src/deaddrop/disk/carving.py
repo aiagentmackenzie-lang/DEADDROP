@@ -1,9 +1,18 @@
 """File carving — recover files by signature from raw disk images."""
 
 from pathlib import Path
+from typing import TypedDict
+
+
+class FileSignature(TypedDict):
+    header: bytes
+    footer: bytes
+    extension: str
+    max_size: int
+
 
 # Common file signatures (magic bytes + footer for carving)
-SIGNATURES = {
+SIGNATURES: dict[str, FileSignature] = {
     "JPEG": {
         "header": b"\xff\xd8\xff",
         "footer": b"\xff\xd9",
@@ -60,7 +69,7 @@ class FileCarver:
         that span across chunk borders.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
-        results = []
+        results: list[dict] = []
         image_size = image_path.stat().st_size
 
         # Overlap must be >= longest signature (header or footer)

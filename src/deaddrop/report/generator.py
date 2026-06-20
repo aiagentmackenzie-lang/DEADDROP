@@ -1,8 +1,8 @@
 """Report generator — HTML and PDF forensic case reports."""
 
 import html as html_module
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
@@ -25,19 +25,19 @@ class ReportGenerator:
         hunt_results = self.mgr.get_hunt_results(case_id)
 
         # Severity breakdown
-        severity_counts = {}
+        severity_counts: dict[str, int] = {}
         for a in artifacts:
             sev = a.get("severity", "info")
             severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
         # Source breakdown
-        source_counts = {}
+        source_counts: dict[str, int] = {}
         for a in artifacts:
             src = a.get("source", "unknown")
             source_counts[src] = source_counts.get(src, 0) + 1
 
         if not output_path:
-            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             output_dir = Path(f"deaddrop_exports/case_{case_id}")
             output_dir.mkdir(parents=True, exist_ok=True)
             ext = ".html" if fmt == "html" else ".pdf"
@@ -140,7 +140,7 @@ class ReportGenerator:
             risk_level = "LOW"
             risk_color = "#16a34a"
 
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         # Severity and source distribution rows — keys are enum values but escape defensively
         sev_rows = " ".join(

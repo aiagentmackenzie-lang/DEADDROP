@@ -2,10 +2,10 @@
 
 import sqlite3
 import uuid
-from datetime import datetime, timezone
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import ClassVar
 
 
 @dataclass
@@ -13,8 +13,8 @@ class Case:
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
     name: str = ""
     analyst: str = ""
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     status: str = "open"  # open, closed, archived
     notes: str = ""
     db_path: str = ""  # path to case-specific SQLite
@@ -119,7 +119,7 @@ class CaseManager:
 
     def create_case(self, name: str, analyst: str = "", notes: str = "") -> Case:
         case = Case(name=name, analyst=analyst, notes=notes)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.conn.execute(
             "INSERT INTO cases (id, name, analyst, created_at, updated_at, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (case.id, case.name, case.analyst, now, now, "open", case.notes),
@@ -129,7 +129,7 @@ class CaseManager:
         case.updated_at = now
         return case
 
-    def get_case(self, case_id: str) -> Optional[Case]:
+    def get_case(self, case_id: str) -> Case | None:
         row = self.conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
         if not row:
             return None
@@ -155,13 +155,13 @@ class CaseManager:
         ) for r in rows]
 
     def close_case(self, case_id: str) -> bool:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         cur = self.conn.execute("UPDATE cases SET status = 'closed', updated_at = ? WHERE id = ?", (now, case_id))
         self.conn.commit()
         return cur.rowcount > 0
 
     # Allowed columns for update_case — prevents SQL injection via kwargs keys
-    _UPDATABLE_COLUMNS = {"name", "analyst", "status", "notes"}
+    _UPDATABLE_COLUMNS: ClassVar[set[str]] = {"name", "analyst", "status", "notes"}
 
     def update_case(self, case_id: str, **kwargs) -> bool:
         if not kwargs:
@@ -170,9 +170,9 @@ class CaseManager:
         safe_kwargs = {k: v for k, v in kwargs.items() if k in self._UPDATABLE_COLUMNS}
         if not safe_kwargs:
             return False
-        safe_kwargs["updated_at"] = datetime.now(timezone.utc).isoformat()
+        safe_kwargs["updated_at"] = datetime.now(UTC).isoformat()
         sets = ", ".join(f"{k} = ?" for k in safe_kwargs)
-        vals = list(safe_kwargs.values()) + [case_id]
+        vals = [*list(safe_kwargs.values()), case_id]
         cur = self.conn.execute(f"UPDATE cases SET {sets} WHERE id = ?", vals)
         self.conn.commit()
         return cur.rowcount > 0
@@ -188,7 +188,7 @@ class CaseManager:
 
     def add_evidence(self, case_id: str, evidence_id: str, etype: str, path: str,
                      filename: str, size_bytes: int, sha256: str, md5: str, fmt: str) -> bool:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.conn.execute(
             "INSERT INTO evidence (id, case_id, type, path, filename, size_bytes, sha256, md5, format, ingested_at, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
             (evidence_id, case_id, etype, path, filename, size_bytes, sha256, md5, fmt, now),
@@ -226,7 +226,10 @@ class CaseManager:
             (case_id, evidence_id or None, source, timestamp, description, severity, artifact_id or None),
         )
         self.conn.commit()
-        return cur.lastrowid
+        # lastrowid is None only if no INSERT succeeded or the driver doesn't
+        # support it; sqlite3 always returns an int for a successful INSERT.
+        lastrowid = cur.lastrowid
+        return lastrowid if lastrowid is not None else -1
 
     def get_timeline(self, case_id: str, from_ts: str = "", to_ts: str = "") -> list[dict]:
         query = "SELECT * FROM timeline WHERE case_id = ?"
@@ -245,7 +248,7 @@ class CaseManager:
                         rule_type: str, severity: str = "medium",
                         evidence_id: str | None = None, match_offset: int = 0,
                         match_data: str = "") -> None:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.conn.execute(
             "INSERT INTO hunt_results (id, case_id, rule_name, rule_type, evidence_id, match_offset, match_data, severity, detected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (result_id, case_id, rule_name, rule_type, evidence_id, match_offset, match_data, severity, now),

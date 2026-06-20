@@ -6,8 +6,8 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from deaddrop.core.config import Config
 from deaddrop.core.case import CaseManager
+from deaddrop.core.config import Config
 
 console = Console()
 
@@ -22,7 +22,6 @@ def get_case_manager(config: Config | None = None) -> CaseManager:
 @click.version_option(version="1.0.0", prog_name="deaddrop")
 def cli():
     """DEADDROP — Digital Forensics Toolkit with AI-assisted triage."""
-    pass
 
 
 # ── Case commands ──────────────────────────────────────────────
@@ -30,7 +29,6 @@ def cli():
 @cli.group()
 def case():
     """Case management."""
-    pass
 
 
 @case.command("create")
@@ -103,7 +101,6 @@ def case_close(case_id: str):
 @cli.group()
 def ingest():
     """Evidence ingestion."""
-    pass
 
 
 @ingest.command("disk")
@@ -161,7 +158,6 @@ def ingest_memory(dump: str, case_id: str):
 @cli.group()
 def analyze():
     """Analyze evidence."""
-    pass
 
 
 @analyze.command("filesystem")
@@ -243,7 +239,6 @@ def analyze_memory(case_id: str, evidence: str | None, plugin: str):
 @cli.group()
 def hunt():
     """Artifact hunting (YARA, IOC)."""
-    pass
 
 
 @hunt.command("run")
@@ -253,8 +248,8 @@ def hunt():
 @click.option("--pack", "-p", type=click.Choice(["persistence", "lateral_movement", "exfiltration"]), default=None)
 def hunt_run(case_id: str, yara_rules: str | None, ioc: str | None, pack: str | None):
     """Run artifact hunt across evidence."""
-    from deaddrop.hunt.yara_scanner import YARAScanner
     from deaddrop.hunt.ioc_matcher import IOCMatcher
+    from deaddrop.hunt.yara_scanner import YARAScanner
     mgr = get_case_manager()
     results = {"yara_hits": 0, "ioc_hits": 0}
     if yara_rules:
@@ -279,7 +274,6 @@ def hunt_run(case_id: str, yara_rules: str | None, ioc: str | None, pack: str | 
 @cli.group()
 def timeline():
     """Timeline generation and export."""
-    pass
 
 
 @timeline.command("generate")
@@ -333,7 +327,6 @@ def timeline_filter(case_id: str, from_ts: str | None, to_ts: str | None, source
 @cli.group()
 def triage():
     """AI-assisted triage."""
-    pass
 
 
 @triage.command("run")
@@ -367,7 +360,6 @@ def triage_summary(case_id: str):
 @cli.group()
 def report():
     """Report generation."""
-    pass
 
 
 @report.command("generate")
@@ -392,8 +384,8 @@ def report_generate(case_id: str, fmt: str, output: str | None):
 @click.option("--host", "-h", default="0.0.0.0", help="Host")
 def dashboard(port: int, host: str):
     """Launch the web dashboard (Fastify API server)."""
-    import subprocess
     import os as _os
+    import subprocess
     server_dir = Path(__file__).parent.parent.parent.parent / "server"
     if not server_dir.exists():
         console.print("[red]Server directory not found. Install the server dependencies first:[/red]")
@@ -422,7 +414,6 @@ def dashboard(port: int, host: str):
 @cli.group()
 def plugin():
     """Plugin management."""
-    pass
 
 
 @plugin.command("list")

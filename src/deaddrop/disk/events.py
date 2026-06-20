@@ -1,11 +1,10 @@
 """Windows event log analyzer — parse EVTX files for security events."""
 
-import uuid
 import struct
+import uuid
 from pathlib import Path
 
 from deaddrop.core.case import CaseManager
-
 
 # Critical security event IDs
 SECURITY_EVENTS = {

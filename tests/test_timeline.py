@@ -1,7 +1,9 @@
 """Tests for timeline engine."""
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from deaddrop.core.case import CaseManager
 from deaddrop.timeline.engine import TimelineEngine
 from deaddrop.timeline.export import TimelineExporter

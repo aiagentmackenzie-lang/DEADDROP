@@ -1,11 +1,10 @@
 """MFT parser — parse Windows Master File Table entries."""
 
 import struct
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
-
 
 # MFT entry attributes
 ATTRIBUTE_TYPES = {
@@ -44,7 +43,7 @@ class MFTParser:
 
     def parse_mft(self, mft_path: Path) -> list[dict]:
         """Parse an MFT file and extract entry metadata."""
-        entries = []
+        entries: list[dict] = []
         if not mft_path.exists():
             return entries
 
@@ -165,6 +164,6 @@ class MFTParser:
             unix_ts = (filetime / 10_000_000) - 11644473600
             if unix_ts < 0:
                 return ""
-            return datetime.fromtimestamp(unix_ts, tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(unix_ts, tz=UTC).isoformat()
         except (OSError, ValueError, OverflowError):
             return ""

@@ -1,15 +1,15 @@
 """Filesystem analyzer — parse filesystem structures from disk images."""
 
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 from deaddrop.core.case import CaseManager
 
 
 class FilesystemAnalyzer:
     """Analyze filesystem structures from disk images.
-    
+
     Uses pytsk3 when available, falls back to raw binary parsing.
     """
 
@@ -107,7 +107,7 @@ class FilesystemAnalyzer:
                         try:
                             ts = meta.crtime
                             if ts and ts > 0:
-                                timestamp = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                                timestamp = datetime.fromtimestamp(ts, tz=UTC).isoformat()
                         except (OSError, ValueError):
                             pass
 
@@ -152,7 +152,7 @@ class FilesystemAnalyzer:
         entries.append({
             "path": str(image_path),
             "category": "disk_image",
-            "timestamp": datetime.fromtimestamp(image_path.stat().st_mtime, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(image_path.stat().st_mtime, tz=UTC).isoformat(),
             "description": f"Disk image: {image_path.name} ({size:,} bytes)",
             "severity": "info",
             "size": size,
