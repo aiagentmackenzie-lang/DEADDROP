@@ -1,11 +1,16 @@
 """Case management with SQLite backend."""
 
+from __future__ import annotations
+
+import logging
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -117,6 +122,33 @@ class CaseManager:
         self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.executescript(SCHEMA)
 
+    def __enter__(self) -> CaseManager:
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        self.close()
+
+    # Valid severity values — enforced at the DB boundary (H-7). Prevents
+    # arbitrary strings (e.g. from YARA rule metadata) poisoning the triage
+    # scorer's severity_counts and the report's CSS classes.
+    VALID_SEVERITIES: ClassVar[frozenset[str]] = frozenset(
+        {"info", "low", "medium", "high", "critical"}
+    )
+
+    @classmethod
+    def _normalize_severity(cls, severity: str, default: str = "info") -> str:
+        """Return a valid severity, or `default` (with a log warning) if invalid.
+
+        Fail-safe (not fail-closed) for severity because the value often comes
+        from external input (YARA rule metadata, IOC feeds). An invalid value
+        is normalized to the caller's default and logged, rather than raising
+        — so a malformed rule doesn't abort a hunt halfway through.
+        """
+        if severity in cls.VALID_SEVERITIES:
+            return severity
+        log.warning("Invalid severity %r — normalizing to %r", severity, default)
+        return default
+
     def create_case(self, name: str, analyst: str = "", notes: str = "") -> Case:
         case = Case(name=name, analyst=analyst, notes=notes)
         now = datetime.now(UTC).isoformat()
@@ -204,6 +236,7 @@ class CaseManager:
                      category: str, timestamp: str, description: str,
                      severity: str = "info", data: str = "{}", artifact_id: str = "") -> str:
         aid = artifact_id or str(uuid.uuid4())[:12]
+        severity = self._normalize_severity(severity, "info")
         self.conn.execute(
             "INSERT INTO artifacts (id, case_id, evidence_id, source, category, timestamp, description, severity, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (aid, case_id, evidence_id or None, source, category, timestamp, description, severity, data),
@@ -221,6 +254,7 @@ class CaseManager:
     def add_timeline_entry(self, case_id: str, source: str, timestamp: str,
                            description: str, severity: str = "info",
                            evidence_id: str | None = None, artifact_id: str = "") -> int:
+        severity = self._normalize_severity(severity, "info")
         cur = self.conn.execute(
             "INSERT INTO timeline (case_id, evidence_id, source, timestamp, description, severity, artifact_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (case_id, evidence_id or None, source, timestamp, description, severity, artifact_id or None),
@@ -248,6 +282,7 @@ class CaseManager:
                         rule_type: str, severity: str = "medium",
                         evidence_id: str | None = None, match_offset: int = 0,
                         match_data: str = "") -> None:
+        severity = self._normalize_severity(severity, "medium")
         now = datetime.now(UTC).isoformat()
         self.conn.execute(
             "INSERT INTO hunt_results (id, case_id, rule_name, rule_type, evidence_id, match_offset, match_data, severity, detected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",

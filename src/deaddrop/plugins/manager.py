@@ -60,13 +60,14 @@ class PluginManager:
     def run_plugin(self, name: str, case_id: str, **kwargs) -> dict:
         """Run a specific plugin."""
         if name not in self.plugins:
-            return {"error": f"Plugin '{name}' not found"}
+            return {"success": False, "error": f"Plugin '{name}' not found"}
 
         plugin = self.plugins[name]
         try:
             result = plugin.entry_point(case_id, **kwargs)
             return {"success": True, "result": result}
         except Exception as e:
+            log.warning("Plugin %s raised: %s", name, e)
             return {"success": False, "error": str(e)}
 
     def _load_builtin_plugins(self) -> None:

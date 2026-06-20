@@ -1,7 +1,11 @@
 """LLM summarizer — generate case summaries using Ollama."""
 
 
+import logging
+
 from deaddrop.core.case import CaseManager
+
+log = logging.getLogger(__name__)
 
 
 class LLMSummarizer:
@@ -28,11 +32,14 @@ class LLMSummarizer:
         # Build context
         context = self._build_context(case, evidence, artifacts, timeline, hunt_results)
 
-        # Try Ollama
+        # Try Ollama; log the failure reason before falling back (H-2: was silent)
         try:
             return self._call_ollama(context)
-        except Exception:
-            # Fallback: generate rule-based summary
+        except Exception as e:
+            log.warning(
+                "Ollama LLM summary failed (%s: %s); falling back to rule-based summary",
+                type(e).__name__, e,
+            )
             return self._generate_rule_summary(case, evidence, artifacts, timeline, hunt_results)
 
     def _build_context(self, case, evidence, artifacts, timeline, hunt_results) -> str:

@@ -56,11 +56,16 @@ class ReportGenerator:
             try:
                 from weasyprint import HTML
                 HTML(string=html_content).write_pdf(str(path))
-            except (ImportError, OSError, Exception) as e:
-                # Fallback: save as HTML (weasyprint or system libs not available)
+            except (ImportError, OSError) as e:
+                # Fallback: save as HTML (weasyprint or system libs not available).
+                # Narrow catch — ImportError = weasyprint not installed; OSError =
+                # missing system libs (pango, gdk-pixbuf). Other exceptions
+                # (programming errors, bad HTML) propagate so real bugs surface
+                # instead of being silently masked as "PDF unavailable".
                 import logging
                 logging.getLogger(__name__).warning(
-                    f"PDF generation failed ({type(e).__name__}: {e}), saving as HTML instead"
+                    "PDF generation failed (%s: %s), saving as HTML instead",
+                    type(e).__name__, e
                 )
                 html_path = path.with_suffix(".html")
                 html_path.write_text(html_content, encoding="utf-8")
