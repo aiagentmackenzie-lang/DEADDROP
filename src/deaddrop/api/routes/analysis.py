@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 
 from deaddrop.api import events
-from deaddrop.api.deps import AuthDep, CaseMgrDep
+from deaddrop.api.deps import AuthDep, CaseMgrDep, RateLimitedDep
 from deaddrop.api.models import (
     AnalyzeRequest,
     EventAnalyzeRequest,
@@ -22,7 +22,7 @@ def _require_case(mgr, case_id: str) -> None:
 
 
 @router.post("/filesystem")
-def analyze_filesystem(mgr: CaseMgrDep, _: AuthDep, body: AnalyzeRequest) -> dict:
+def analyze_filesystem(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: AnalyzeRequest) -> dict:
     from deaddrop.disk.filesystem import FilesystemAnalyzer
     _require_case(mgr, body.case_id)
     results = FilesystemAnalyzer(mgr).analyze(body.case_id, body.evidence_id)
@@ -31,7 +31,7 @@ def analyze_filesystem(mgr: CaseMgrDep, _: AuthDep, body: AnalyzeRequest) -> dic
 
 
 @router.post("/registry")
-def analyze_registry(mgr: CaseMgrDep, _: AuthDep, body: AnalyzeRequest) -> dict:
+def analyze_registry(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: AnalyzeRequest) -> dict:
     from deaddrop.disk.registry import RegistryAnalyzer
     _require_case(mgr, body.case_id)
     results = RegistryAnalyzer(mgr).analyze(body.case_id, body.evidence_id)
@@ -40,7 +40,7 @@ def analyze_registry(mgr: CaseMgrDep, _: AuthDep, body: AnalyzeRequest) -> dict:
 
 
 @router.post("/prefetch")
-def analyze_prefetch(mgr: CaseMgrDep, _: AuthDep, body: AnalyzeRequest) -> dict:
+def analyze_prefetch(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: AnalyzeRequest) -> dict:
     from deaddrop.disk.prefetch import PrefetchAnalyzer
     _require_case(mgr, body.case_id)
     results = PrefetchAnalyzer(mgr).analyze(body.case_id, body.evidence_id)
@@ -49,7 +49,7 @@ def analyze_prefetch(mgr: CaseMgrDep, _: AuthDep, body: AnalyzeRequest) -> dict:
 
 
 @router.post("/events")
-def analyze_events(mgr: CaseMgrDep, _: AuthDep, body: EventAnalyzeRequest) -> dict:
+def analyze_events(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: EventAnalyzeRequest) -> dict:
     from deaddrop.disk.events import EventLogAnalyzer
     _require_case(mgr, body.case_id)
     results = EventLogAnalyzer(mgr).analyze(body.case_id, body.evidence_id, body.source)
@@ -58,7 +58,7 @@ def analyze_events(mgr: CaseMgrDep, _: AuthDep, body: EventAnalyzeRequest) -> di
 
 
 @router.post("/memory")
-def analyze_memory(mgr: CaseMgrDep, _: AuthDep, body: MemoryAnalyzeRequest) -> dict:
+def analyze_memory(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: MemoryAnalyzeRequest) -> dict:
     from deaddrop.memory.volatility import VolatilityWrapper
     _require_case(mgr, body.case_id)
     results = VolatilityWrapper(mgr).run_plugin(body.case_id, body.evidence_id, body.plugin)
@@ -67,7 +67,7 @@ def analyze_memory(mgr: CaseMgrDep, _: AuthDep, body: MemoryAnalyzeRequest) -> d
 
 
 @router.post("/timeline/generate")
-def generate_timeline(mgr: CaseMgrDep, _: AuthDep, body: TriageRequest) -> dict:
+def generate_timeline(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: TriageRequest) -> dict:
     from deaddrop.timeline.engine import TimelineEngine
     _require_case(mgr, body.case_id)
     results = TimelineEngine(mgr).generate(body.case_id)
@@ -76,7 +76,7 @@ def generate_timeline(mgr: CaseMgrDep, _: AuthDep, body: TriageRequest) -> dict:
 
 
 @router.post("/triage")
-def triage_run(mgr: CaseMgrDep, _: AuthDep, body: TriageRequest) -> dict:
+def triage_run(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: TriageRequest) -> dict:
     from deaddrop.triage.scorer import TriageScorer
     _require_case(mgr, body.case_id)
     results = TriageScorer(mgr).score(body.case_id)
@@ -85,7 +85,7 @@ def triage_run(mgr: CaseMgrDep, _: AuthDep, body: TriageRequest) -> dict:
 
 
 @router.post("/triage/summary")
-def triage_summary(mgr: CaseMgrDep, _: AuthDep, body: TriageRequest) -> dict:
+def triage_summary(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: TriageRequest) -> dict:
     from deaddrop.triage.llm import LLMSummarizer
     _require_case(mgr, body.case_id)
     summary = LLMSummarizer(mgr).summarize(body.case_id)

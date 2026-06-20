@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
+from deaddrop.core.audit import audit as audit_log
+
 log = logging.getLogger(__name__)
 
 
@@ -161,6 +163,7 @@ class CaseManager:
         self.conn.commit()
         case.created_at = now
         case.updated_at = now
+        audit_log("case.create", case.id, actor=case.analyst, name=case.name)
         return case
 
     def get_case(self, case_id: str) -> Case | None:
@@ -192,7 +195,10 @@ class CaseManager:
         now = datetime.now(UTC).isoformat()
         cur = self.conn.execute("UPDATE cases SET status = 'closed', updated_at = ? WHERE id = ?", (now, case_id))
         self.conn.commit()
-        return cur.rowcount > 0
+        ok = cur.rowcount > 0
+        if ok:
+            audit_log("case.close", case_id)
+        return ok
 
     # Allowed columns for update_case — prevents SQL injection via kwargs keys
     _UPDATABLE_COLUMNS: ClassVar[set[str]] = {"name", "analyst", "status", "notes"}
@@ -200,16 +206,24 @@ class CaseManager:
     def update_case(self, case_id: str, **kwargs) -> bool:
         if not kwargs:
             return False
-        # Whitelist column names to prevent SQL injection
-        safe_kwargs = {k: v for k, v in kwargs.items() if k in self._UPDATABLE_COLUMNS}
-        if not safe_kwargs:
+        # Whitelist column names to prevent SQL injection (C-02). Unknown columns
+        # are rejected+logged (fail-closed, H-4 hardening) rather than silently
+        # dropped — a caller passing a typo'd column shouldn't get a silent no-op.
+        unknown = set(kwargs) - self._UPDATABLE_COLUMNS
+        if unknown:
+            log.warning("update_case rejected unknown columns for %s: %s",
+                        case_id, sorted(unknown))
             return False
+        safe_kwargs = dict(kwargs)
         safe_kwargs["updated_at"] = datetime.now(UTC).isoformat()
         sets = ", ".join(f"{k} = ?" for k in safe_kwargs)
         vals = [*list(safe_kwargs.values()), case_id]
         cur = self.conn.execute(f"UPDATE cases SET {sets} WHERE id = ?", vals)
         self.conn.commit()
-        return cur.rowcount > 0
+        ok = cur.rowcount > 0
+        if ok:
+            audit_log("case.update", case_id, fields=list(kwargs.keys()))
+        return ok
 
     def delete_case(self, case_id: str) -> bool:
         """Delete a case and all its children transactionally.
@@ -228,7 +242,10 @@ class CaseManager:
             self.conn.execute("DELETE FROM evidence WHERE case_id = ?", (case_id,))
             cur = self.conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
             self.conn.commit()
-            return cur.rowcount > 0
+            ok = cur.rowcount > 0
+            if ok:
+                audit_log("case.delete", case_id)
+            return ok
         except Exception:
             self.conn.rollback()
             raise
@@ -241,6 +258,8 @@ class CaseManager:
             (evidence_id, case_id, etype, path, filename, size_bytes, sha256, md5, fmt, now),
         )
         self.conn.commit()
+        audit_log("evidence.add", case_id, evidence_id=evidence_id,
+                  etype=etype, filename=filename, fmt=fmt, size=size_bytes)
         return True
 
     def list_evidence(self, case_id: str) -> list[dict]:
@@ -257,6 +276,8 @@ class CaseManager:
             (aid, case_id, evidence_id or None, source, category, timestamp, description, severity, data),
         )
         self.conn.commit()
+        audit_log("artifact.add", case_id, artifact_id=aid, source=source,
+                  evidence_id=evidence_id, severity=severity)
         return aid
 
     def list_artifacts(self, case_id: str, source: str | None = None) -> list[dict]:
@@ -278,7 +299,9 @@ class CaseManager:
         # lastrowid is None only if no INSERT succeeded or the driver doesn't
         # support it; sqlite3 always returns an int for a successful INSERT.
         lastrowid = cur.lastrowid
-        return lastrowid if lastrowid is not None else -1
+        tid = lastrowid if lastrowid is not None else -1
+        audit_log("timeline.add", case_id, entry_id=tid, source=source)
+        return tid
 
     def get_timeline(self, case_id: str, from_ts: str = "", to_ts: str = "") -> list[dict]:
         query = "SELECT * FROM timeline WHERE case_id = ?"
@@ -304,6 +327,8 @@ class CaseManager:
             (result_id, case_id, rule_name, rule_type, evidence_id, match_offset, match_data, severity, now),
         )
         self.conn.commit()
+        audit_log("hunt.add", case_id, result_id=result_id, rule_name=rule_name,
+                  rule_type=rule_type, severity=severity)
 
     def get_hunt_results(self, case_id: str) -> list[dict]:
         rows = self.conn.execute("SELECT * FROM hunt_results WHERE case_id = ? ORDER BY detected_at DESC", (case_id,)).fetchall()

@@ -8,14 +8,14 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from deaddrop.api import events
-from deaddrop.api.deps import AuthDep, CaseMgrDep
+from deaddrop.api.deps import AuthDep, CaseMgrDep, RateLimitedDep
 from deaddrop.api.models import ReportRequest, TimelineExportRequest
 
 router = APIRouter()
 
 
 @router.post("/generate")
-def generate_report(mgr: CaseMgrDep, _: AuthDep, body: ReportRequest) -> dict:
+def generate_report(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: ReportRequest) -> dict:
     from deaddrop.report.generator import ReportGenerator
     if not mgr.get_case(body.case_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case {body.case_id} not found")
@@ -31,7 +31,7 @@ def generate_report(mgr: CaseMgrDep, _: AuthDep, body: ReportRequest) -> dict:
 
 
 @router.post("/timeline/export")
-def export_timeline(mgr: CaseMgrDep, _: AuthDep, body: TimelineExportRequest) -> dict:
+def export_timeline(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: TimelineExportRequest) -> dict:
     from deaddrop.timeline.export import TimelineExporter
     if not mgr.get_case(body.case_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case {body.case_id} not found")
@@ -41,7 +41,7 @@ def export_timeline(mgr: CaseMgrDep, _: AuthDep, body: TimelineExportRequest) ->
 
 
 @router.get("/timeline/{case_id}/export", response_model=None)
-def export_timeline_get(mgr: CaseMgrDep, _: AuthDep, case_id: str, format: str = "csv") -> FileResponse | PlainTextResponse:
+def export_timeline_get(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, case_id: str, format: str = "csv") -> FileResponse | PlainTextResponse:
     """Export timeline and stream the file back to the client."""
     from deaddrop.timeline.export import TimelineExporter
     if not mgr.get_case(case_id):

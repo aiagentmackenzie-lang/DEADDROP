@@ -13,13 +13,38 @@ class ReportGenerator:
     def __init__(self, case_manager: CaseManager):
         self.mgr = case_manager
 
-    def generate(self, case_id: str, fmt: str = "html", output_path: str | None = None) -> str:
-        """Generate a case report in HTML or PDF format."""
+    def generate(self, case_id: str, fmt: str = "html", output_path: str | None = None,
+                 skip_verify: bool = False) -> str:
+        """Generate a case report in HTML or PDF format.
+
+        Chain-of-custody gate (Phase 4): by default, re-verifies every evidence
+        item's SHA-256/MD5 before rendering and raises ValueError if any evidence
+        file is missing or its hash no longer matches the ingestion record. This
+        prevents a court report from being generated against tampered or missing
+        evidence. Pass ``skip_verify=True`` only with explicit analyst sign-off.
+        """
         case = self.mgr.get_case(case_id)
         if not case:
             raise ValueError(f"Case {case_id} not found")
 
         evidence = self.mgr.list_evidence(case_id)
+
+        # Integrity gate — fail-closed for court reports.
+        if not skip_verify:
+            from deaddrop.core.evidence import EvidenceManager
+            em = EvidenceManager(self.mgr)
+            failures = []
+            for ev in evidence:
+                v = em.verify_evidence(case_id, ev["id"])
+                if not v["verified"]:
+                    failures.append({"evidence_id": ev["id"], "filename": ev["filename"],
+                                     "reason": v.get("reason", "hash mismatch")})
+            if failures:
+                raise ValueError(
+                    "Refusing to generate report: chain-of-custody verification "
+                    f"failed for {len(failures)} evidence item(s): {failures}"
+                )
+
         artifacts = self.mgr.list_artifacts(case_id)
         timeline = self.mgr.get_timeline(case_id)
         hunt_results = self.mgr.get_hunt_results(case_id)

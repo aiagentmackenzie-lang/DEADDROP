@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 
 from deaddrop.api import events
-from deaddrop.api.deps import AuthDep, CaseMgrDep
+from deaddrop.api.deps import AuthDep, CaseMgrDep, RateLimitedDep
 from deaddrop.api.models import HuntIOCRequest, HuntYaraRequest, TriageRequest
 
 router = APIRouter()
@@ -17,7 +17,7 @@ def _require_case(mgr, case_id: str) -> None:
 
 
 @router.post("/yara")
-def hunt_yara(mgr: CaseMgrDep, _: AuthDep, body: HuntYaraRequest) -> dict:
+def hunt_yara(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: HuntYaraRequest) -> dict:
     from deaddrop.hunt.yara_scanner import YARAScanner
     _require_case(mgr, body.case_id)
     scanner = YARAScanner(mgr)
@@ -39,7 +39,7 @@ def hunt_yara(mgr: CaseMgrDep, _: AuthDep, body: HuntYaraRequest) -> dict:
 
 
 @router.post("/ioc")
-def hunt_ioc(mgr: CaseMgrDep, _: AuthDep, body: HuntIOCRequest) -> dict:
+def hunt_ioc(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: HuntIOCRequest) -> dict:
     from deaddrop.hunt.ioc_matcher import IOCMatcher
     _require_case(mgr, body.case_id)
     matcher = IOCMatcher(mgr)
@@ -51,7 +51,7 @@ def hunt_ioc(mgr: CaseMgrDep, _: AuthDep, body: HuntIOCRequest) -> dict:
 
 
 @router.post("/ioc/patterns")
-def hunt_ioc_patterns(mgr: CaseMgrDep, _: AuthDep, body: TriageRequest) -> dict:
+def hunt_ioc_patterns(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: TriageRequest) -> dict:
     """Auto-detect IOCs in evidence using the built-in regex patterns."""
     from deaddrop.hunt.ioc_matcher import IOCMatcher
     _require_case(mgr, body.case_id)

@@ -150,7 +150,7 @@ class TestH1PDFExceptNarrow:
 
         # A ValueError must propagate (not be swallowed into HTML fallback)
         with pytest.raises(ValueError, match="simulated programming error"):
-            gen.generate(c.id, "pdf", str(tmp_path / "out.pdf"))
+            gen.generate(c.id, "pdf", str(tmp_path / "out.pdf"), skip_verify=True)
 
 
 class TestRunPluginReturnShape:

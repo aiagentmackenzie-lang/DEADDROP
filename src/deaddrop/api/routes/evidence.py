@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 
 from deaddrop.api import events
-from deaddrop.api.deps import AuthDep, CaseMgrDep
+from deaddrop.api.deps import AuthDep, CaseMgrDep, RateLimitedDep
 from deaddrop.api.models import DiskIngest, MemoryIngest
 from deaddrop.core.evidence import EvidenceManager
 
@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.post("/disk", status_code=status.HTTP_201_CREATED)
-def ingest_disk(mgr: CaseMgrDep, _: AuthDep, body: DiskIngest) -> dict:
+def ingest_disk(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: DiskIngest) -> dict:
     if not mgr.get_case(body.case_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case {body.case_id} not found")
     em = EvidenceManager(mgr)
@@ -26,7 +26,7 @@ def ingest_disk(mgr: CaseMgrDep, _: AuthDep, body: DiskIngest) -> dict:
 
 
 @router.post("/memory", status_code=status.HTTP_201_CREATED)
-def ingest_memory(mgr: CaseMgrDep, _: AuthDep, body: MemoryIngest) -> dict:
+def ingest_memory(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, body: MemoryIngest) -> dict:
     if not mgr.get_case(body.case_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case {body.case_id} not found")
     em = EvidenceManager(mgr)
@@ -39,7 +39,7 @@ def ingest_memory(mgr: CaseMgrDep, _: AuthDep, body: MemoryIngest) -> dict:
 
 
 @router.post("/{case_id}/{evidence_id}/verify")
-def verify_evidence(mgr: CaseMgrDep, _: AuthDep, case_id: str, evidence_id: str) -> dict:
+def verify_evidence(mgr: CaseMgrDep, _: AuthDep, _rate: RateLimitedDep, case_id: str, evidence_id: str) -> dict:
     if not mgr.get_case(case_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Case {case_id} not found")
     em = EvidenceManager(mgr)

@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+from collections import defaultdict
+from threading import Lock
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 
 from deaddrop.core.case import CaseManager
 from deaddrop.core.config import Config
@@ -82,3 +85,52 @@ def get_case_manager(config: ConfigDep):
 
 
 CaseMgrDep = Annotated[CaseManager, Depends(get_case_manager)]
+
+
+# ── Rate limiting (Phase 4) ──────────────────────────────────────
+# Minimal in-memory fixed-window limiter for the expensive endpoints (ingest,
+# hunt, analyze, report). Bounds a single client to N calls per window. State
+# is per-process (fine for a single uvicorn worker; for multi-worker deploys a
+# shared store like Redis would be needed — documented in README).
+
+_RATE_BUCKETS: dict[str, dict[str, float]] = defaultdict(dict)
+_RATE_LOCK = Lock()
+
+
+def _rate_limit(request: Request, limit: int, window: float) -> None:
+    """Fixed-window per-client-IP rate limit. Raises 429 if exceeded."""
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    bucket_key = f"{limit}/{int(window * 1000)}"
+    bucket = _RATE_BUCKETS[bucket_key]
+    with _RATE_LOCK:
+        # Purge expired entries for this bucket
+        expired = [k for k, t in bucket.items() if now - t > window]
+        for k in expired:
+            bucket.pop(k, None)
+        count = sum(1 for t in bucket.values() if now - t <= window)
+        if count >= limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded: {limit} requests per {int(window)}s",
+            )
+        bucket[client + str(now)] = now
+
+
+def rate_limit_expensive(request: Request) -> None:
+    """Rate limit for expensive forensic endpoints (ingest/hunt/analyze/report).
+
+    Defaults: 20 requests per 60s per client IP. Tunable via
+    DEADDROP_RATE_LIMIT (format: 'limit/window_seconds').
+    """
+    raw = os.environ.get("DEADDROP_RATE_LIMIT", "20/60")
+    try:
+        limit_s, window_s = raw.split("/")
+        limit = int(limit_s)
+        window = float(window_s)
+    except (ValueError, AttributeError):
+        limit, window = 20, 60.0
+    _rate_limit(request, limit, window)
+
+
+RateLimitedDep = Annotated[None, Depends(rate_limit_expensive)]

@@ -247,3 +247,29 @@ class TestPluginsRoute:
         cid = _create_case(client)
         r = client.post("/api/plugins/run", json={"case_id": cid, "name": "nope"})
         assert r.status_code == 400
+
+
+class TestRateLimit:
+    """Phase 4: expensive endpoints are rate-limited per client IP."""
+
+    def test_ingest_rate_limited(self, tmp_path, monkeypatch):
+        """Bursting ingest calls past the limit returns 429."""
+        monkeypatch.setenv("DEADDROP_HOME", str(tmp_path))
+        monkeypatch.setenv("DEADDROP_RATE_LIMIT", "3/60")  # very low limit
+        monkeypatch.delenv("DEADDROP_API_TOKEN", raising=False)
+        from deaddrop.api import events
+        events.bus.reset()
+        from deaddrop.api import create_app
+        with TestClient(create_app()) as client:
+            cid = _create_case(client)
+            img = tmp_path / "x.raw"
+            img.write_bytes(b"\x00" * 16)
+            statuses = []
+            for _ in range(6):
+                r = client.post("/api/evidence/disk", json={
+                    "case_id": cid, "image_path": str(img),
+                })
+                statuses.append(r.status_code)
+            # First few succeed (201), then 429 kicks in
+            assert 201 in statuses
+            assert 429 in statuses

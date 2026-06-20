@@ -34,7 +34,7 @@ class TestC01XSSPrevention:
 
         gen = ReportGenerator(case_mgr)
         output = str(tmp_path / "xss_report.html")
-        path = gen.generate(c.id, "html", output)
+        path = gen.generate(c.id, "html", output, skip_verify=True)
         content = Path(path).read_text()
 
         # Raw script/img tags must NOT appear — they should be escaped
@@ -52,7 +52,7 @@ class TestC01XSSPrevention:
 
         gen = ReportGenerator(case_mgr)
         output = str(tmp_path / "xss2_report.html")
-        path = gen.generate(c.id, "html", output)
+        path = gen.generate(c.id, "html", output, skip_verify=True)
         content = Path(path).read_text()
 
         assert "<script>document.cookie</script>" not in content
@@ -341,7 +341,7 @@ class TestM07PDFWarning:
         monkeypatch.setattr(builtins, "__import__", _no_weasyprint)
 
         with caplog.at_level(logging.WARNING, logger="deaddrop.report.generator"):
-            path = gen.generate(c.id, "pdf", output)
+            path = gen.generate(c.id, "pdf", output, skip_verify=True)
 
         # Fallback: path should reference an .html file
         assert ".html" in path
@@ -360,7 +360,7 @@ class TestM07PDFWarning:
         case_mgr.add_evidence(c.id, "ev1", "disk", "/tmp/img.raw", "img.raw", 1024, "a" * 64, "b" * 32, "RAW")
         gen = ReportGenerator(case_mgr)
         output = str(tmp_path / "report_real.pdf")
-        path = gen.generate(c.id, "pdf", output)
+        path = gen.generate(c.id, "pdf", output, skip_verify=True)
         assert path.endswith(".pdf")
         assert Path(path).read_bytes()[:5] == b"%PDF-"
 
