@@ -49,9 +49,9 @@ coverage.xml
 # MyPy
 .mypy_cache/
 
-# Audit artifacts (internal, not for repo)
-BUG_CATALOG.md
-README_AUDIT.md
+# Audit artifacts (internal, not for repo) — BUG_CATALOG.md and README_AUDIT.md
+# were trashed on 2026-06-20 (superseded by CHANGELOG.md). Lines kept in case
+# they're regenerated.
 
 # Internal planning roadmap (not shipped — lives locally with the project)
 docs/production-roadmap.md
